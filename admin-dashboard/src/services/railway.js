@@ -124,6 +124,14 @@ export async function triggerDeploy(serviceId) {
   `, { serviceId, environmentId });
 }
 
+export async function deleteService(serviceId) {
+  await gql(`
+    mutation ($serviceId: String!) {
+      serviceDelete(id: $serviceId)
+    }
+  `, { serviceId });
+}
+
 export async function deployService(serviceId, { dbName, redisPrefix, siteName }) {
   await setServiceVariables(serviceId, {
     WORDPRESS_DB_HOST: config.MYSQL_HOST,

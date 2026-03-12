@@ -24,6 +24,14 @@ export async function createSite({ name, slug, dbName, redisPrefix }) {
   return result.insertId;
 }
 
+export async function deleteSite(id) {
+  const pool = getDashboardPool();
+  await pool.query(
+    'UPDATE dashboard_sites SET status = ? WHERE id = ?',
+    ['deleted', id]
+  );
+}
+
 export async function updateSite(id, fields) {
   const pool = getDashboardPool();
   const sets = [];

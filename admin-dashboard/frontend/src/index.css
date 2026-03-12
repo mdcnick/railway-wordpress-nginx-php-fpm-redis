@@ -138,6 +138,8 @@ select.input { appearance: none; cursor: pointer; }
 .btn-danger { background: var(--danger); color: white; }
 .btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
 
+.btn-sm { padding: 0.25rem 0.75rem; font-size: 0.8rem; }
+
 .btn-outline {
   background: transparent;
   border: 1px solid var(--border);

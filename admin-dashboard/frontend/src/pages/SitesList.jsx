@@ -12,6 +12,7 @@ export default function SitesList() {
   const [newName, setNewName] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [deleting, setDeleting] = useState(null);
 
   useEffect(() => {
     setGetToken(getToken);
@@ -28,6 +29,22 @@ export default function SitesList() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDelete(site) {
+    if (!confirm(`Delete "${site.name}"? This will remove the Railway service and mark the site as deleted.`)) return;
+    setDeleting(site.id);
+    setError('');
+    setSuccess('');
+    try {
+      await api.deleteSite(site.id);
+      setSuccess(`"${site.name}" has been deleted.`);
+      await loadSites();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -90,6 +107,7 @@ export default function SitesList() {
                 <th>Status</th>
                 <th>Domain</th>
                 <th>Created</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -106,6 +124,15 @@ export default function SitesList() {
                     ) : '—'}
                   </td>
                   <td>{new Date(site.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleDelete(site)}
+                      disabled={deleting === site.id}
+                    >
+                      {deleting === site.id ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

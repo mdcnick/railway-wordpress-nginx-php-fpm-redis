@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { createSite, listSites, getSite, updateSite } from '../services/siteRegistry.js';
+import { createSite, listSites, getSite, updateSite, deleteSite } from '../services/siteRegistry.js';
 import { createDatabase } from '../services/database.js';
-import { createService, deployService, getServiceStatus } from '../services/railway.js';
+import { createService, deployService, getServiceStatus, deleteService } from '../services/railway.js';
 import { listWpUsers } from '../services/wordpress.js';
 
 const app = new Hono();
@@ -60,6 +60,28 @@ app.get('/:id/status', async (c) => {
   }
 
   return c.json({ id: site.id, status: deployStatus, domain: site.railway_domain });
+});
+
+// Delete site
+app.delete('/:id', async (c) => {
+  const site = await getSite(c.req.param('id'));
+  if (!site) return c.json({ error: 'Not found' }, 404);
+  if (site.status === 'deleted') return c.json({ error: 'Already deleted' }, 400);
+
+  try {
+    if (site.railway_service_id) {
+      try {
+        await deleteService(site.railway_service_id);
+      } catch (err) {
+        console.error('Railway service deletion error (continuing):', err);
+      }
+    }
+    await deleteSite(site.id);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error('Site deletion error:', err);
+    return c.json({ error: err.message || 'Failed to delete site' }, 500);
+  }
 });
 
 // Create new site
