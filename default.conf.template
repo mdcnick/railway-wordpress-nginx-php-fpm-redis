@@ -57,11 +57,13 @@ server {
         access_log off;
     }
 
-    # Health check endpoint
-    location /health {
+    # Health check endpoint — proves both Nginx and PHP-FPM are alive
+    location = /health {
         access_log off;
-        return 200 "healthy\n";
-        add_header Content-Type text/plain;
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_param SCRIPT_FILENAME $document_root/health.php;
+        fastcgi_param QUERY_STRING "";
+        include fastcgi_params;
     }
 
     # Deny access to hidden files

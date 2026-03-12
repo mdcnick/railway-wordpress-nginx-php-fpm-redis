@@ -48,12 +48,14 @@ app.get('/:id/status', async (c) => {
   if (site.railway_service_id && site.status === 'provisioning') {
     try {
       const railwayStatus = await getServiceStatus(site.railway_service_id);
-      if (railwayStatus === 'SUCCESS') {
+      if (railwayStatus === 'ACTIVE') {
         await updateSite(site.id, { status: 'active' });
         deployStatus = 'active';
+        console.log(`[status-poller] site ${site.id} transitioned to active (Railway: ${railwayStatus})`);
       } else if (railwayStatus === 'FAILED' || railwayStatus === 'CRASHED') {
         await updateSite(site.id, { status: 'error', error_message: `Deployment ${railwayStatus}` });
         deployStatus = 'error';
+        console.log(`[status-poller] site ${site.id} error (Railway: ${railwayStatus})`);
       } else if (railwayStatus === 'no_deployments') {
         // Service exists but was never deployed — surface as an error so it's
         // not silently stuck in 'provisioning' indefinitely.

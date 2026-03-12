@@ -49,6 +49,10 @@ require_once('/usr/local/share/wp-config-custom.php');\\
     fi
 fi
 
+# 5.5. Write health check script (must be after WP init so volume exists)
+echo "Writing health check script..."
+echo '<?php header("Content-Type: application/json"); echo json_encode(["status" => "ok"]);' > /var/www/html/health.php
+
 # 6. Fix permissions
 chown -R www-data:www-data /var/www/html
 
