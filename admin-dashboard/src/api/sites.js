@@ -48,6 +48,11 @@ app.get('/:id/status', async (c) => {
       } else if (railwayStatus === 'FAILED' || railwayStatus === 'CRASHED') {
         await updateSite(site.id, { status: 'error', error_message: `Deployment ${railwayStatus}` });
         deployStatus = 'error';
+      } else if (railwayStatus === 'no_deployments') {
+        // Service exists but was never deployed — surface as an error so it's
+        // not silently stuck in 'provisioning' indefinitely.
+        await updateSite(site.id, { status: 'error', error_message: 'No deployments found — service may not have been triggered' });
+        deployStatus = 'error';
       }
     } catch (err) {
       console.error('Status check error:', err);

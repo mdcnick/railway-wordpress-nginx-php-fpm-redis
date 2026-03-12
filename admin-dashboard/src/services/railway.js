@@ -115,6 +115,15 @@ export async function getServiceStatus(serviceId) {
   return edges[0].node.status;
 }
 
+export async function triggerDeploy(serviceId) {
+  const environmentId = await getEnvironmentId();
+  await gql(`
+    mutation ($serviceId: String!, $environmentId: String!) {
+      serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId)
+    }
+  `, { serviceId, environmentId });
+}
+
 export async function deployService(serviceId, { dbName, redisPrefix, siteName }) {
   await setServiceVariables(serviceId, {
     WORDPRESS_DB_HOST: config.MYSQL_HOST,
@@ -130,5 +139,11 @@ export async function deployService(serviceId, { dbName, redisPrefix, siteName }
 
   await createVolume(serviceId, `${siteName}-volume`, '/var/www/html');
   const domain = await getServiceDomain(serviceId);
+
+  // Trigger an actual deployment now that all configuration is in place.
+  // Without this call Railway has no deployments to report, so getServiceStatus
+  // returns 'no_deployments' and the site stays stuck in 'provisioning' forever.
+  await triggerDeploy(serviceId);
+
   return { domain };
 }
