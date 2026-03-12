@@ -1,7 +1,5 @@
-import { createClerkClient } from '@clerk/backend';
+import { verifyToken } from '@clerk/backend';
 import config from '../config.js';
-
-const clerk = createClerkClient({ secretKey: config.CLERK_SECRET_KEY });
 
 export async function clerkAuth(c, next) {
   const authHeader = c.req.header('Authorization');
@@ -12,10 +10,13 @@ export async function clerkAuth(c, next) {
   }
 
   try {
-    const payload = await clerk.verifyToken(token);
+    const payload = await verifyToken(token, {
+      secretKey: config.CLERK_SECRET_KEY,
+    });
     c.set('auth', payload);
     await next();
-  } catch {
+  } catch (err) {
+    console.error('Token verification failed:', err.message || err);
     return c.json({ error: 'Invalid session' }, 401);
   }
 }
