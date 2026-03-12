@@ -17,4 +17,7 @@ if (getenv('REDIS_HOST')) {
     define('WP_REDIS_PORT', getenv('REDIS_PORT') ?: 6379);
     define('WP_REDIS_PASSWORD', getenv('REDIS_PASSWORD'));
     define('WP_CACHE', true);
+    if (getenv('WP_REDIS_PREFIX')) {
+        define('WP_REDIS_PREFIX', getenv('WP_REDIS_PREFIX'));
+    }
 }
