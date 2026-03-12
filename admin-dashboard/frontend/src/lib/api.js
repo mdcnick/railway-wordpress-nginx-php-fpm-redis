@@ -26,6 +26,7 @@ export const api = {
   getSiteUsers: (id) => apiFetch(`/sites/${id}/users`),
   createSite: (name) => apiFetch('/sites', { method: 'POST', body: JSON.stringify({ name }) }),
   deleteSite: (id) => apiFetch(`/sites/${id}`, { method: 'DELETE' }),
+  purgeSites: () => apiFetch('/sites/purge', { method: 'DELETE' }),
   resetPassword: (siteId, data) =>
     apiFetch(`/passwords/${siteId}/reset`, { method: 'POST', body: JSON.stringify(data) }),
 };

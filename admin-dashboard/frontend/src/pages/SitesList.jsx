@@ -13,6 +13,7 @@ export default function SitesList() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [deleting, setDeleting] = useState(null);
+  const [purging, setPurging] = useState(false);
 
   useEffect(() => {
     setGetToken(getToken);
@@ -48,6 +49,22 @@ export default function SitesList() {
     }
   }
 
+  async function handlePurge() {
+    if (!confirm('Purge all deleted sites from the database? This frees up their slugs for reuse.')) return;
+    setPurging(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await api.purgeSites();
+      setSuccess(`Purged ${result.purged} deleted site(s).`);
+      await loadSites();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPurging(false);
+    }
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
     if (!newName.trim()) return;
@@ -71,6 +88,9 @@ export default function SitesList() {
       <div className="page-header">
         <h1>WordPress Sites</h1>
         <span className="badge badge-info">{sites.length} sites</span>
+        <button className="btn btn-outline btn-sm" onClick={handlePurge} disabled={purging}>
+          {purging ? 'Purging...' : 'Purge Deleted'}
+        </button>
       </div>
 
       <form className="create-form" onSubmit={handleCreate}>
