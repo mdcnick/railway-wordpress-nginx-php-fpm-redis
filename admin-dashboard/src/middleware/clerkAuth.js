@@ -16,8 +16,7 @@ export async function clerkAuth(c, next) {
     c.set('auth', payload);
     await next();
   } catch (err) {
-    const reason = err.reason || err.code || err.message || 'unknown';
-    console.error('Token verification failed:', reason, err);
-    return c.json({ error: `Invalid session: ${reason}` }, 401);
+    console.error('Token verification failed:', err.reason || err.message);
+    return c.json({ error: 'Invalid session' }, 401);
   }
 }

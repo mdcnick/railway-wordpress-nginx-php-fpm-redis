@@ -5,7 +5,7 @@ import { api, setGetToken } from '../lib/api.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 
 export default function SitesList() {
-  const { getToken } = useAuth();
+  const { getToken, isLoaded } = useAuth();
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -15,8 +15,10 @@ export default function SitesList() {
 
   useEffect(() => {
     setGetToken(() => getToken);
-    loadSites();
-  }, [getToken]);
+    if (isLoaded) {
+      loadSites();
+    }
+  }, [getToken, isLoaded]);
 
   async function loadSites() {
     try {
