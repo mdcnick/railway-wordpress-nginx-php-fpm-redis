@@ -26,7 +26,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The status poller recognizes Railway's `ACTIVE` status and marks the site active (not stuck in provisioning)
   3. New services are created with `healthcheckPath: '/health'` so Railway verifies Nginx is responding before marking a deploy active
   4. The `serviceInstanceRedeploy` call is confirmed as the final step in `deployService()` and protected from regression
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — Fix status poller, add healthcheckPath, upgrade /health to PHP-FPM, verify in production
 
 ### Phase 2: Harden Failure Modes
 **Goal**: Creation failures are self-diagnosing and leave no permanent damage to the system
@@ -45,5 +48,5 @@ Phases execute in numeric order: 1 → 2
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Fix the Broken Pipeline | 0/? | Not started | - |
+| 1. Fix the Broken Pipeline | 0/1 | Not started | - |
 | 2. Harden Failure Modes | 0/? | Not started | - |
