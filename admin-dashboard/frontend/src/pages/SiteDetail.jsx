@@ -22,7 +22,7 @@ export default function SiteDetail() {
   const pollRef = useRef(null);
 
   useEffect(() => {
-    setGetToken(() => getToken);
+    setGetToken(getToken);
     loadSite();
     return () => clearInterval(pollRef.current);
   }, [id, getToken]);

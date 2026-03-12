@@ -14,7 +14,7 @@ export default function SitesList() {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    setGetToken(() => getToken);
+    setGetToken(getToken);
     if (isLoaded) {
       loadSites();
     }
