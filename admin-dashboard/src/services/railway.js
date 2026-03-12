@@ -1,6 +1,6 @@
 import config from '../config.js';
 
-const RAILWAY_API = 'https://backboard.railway.app/graphql/v2';
+const RAILWAY_API = 'https://backboard.railway.com/graphql/v2';
 
 async function gql(query, variables = {}) {
   const res = await fetch(RAILWAY_API, {
