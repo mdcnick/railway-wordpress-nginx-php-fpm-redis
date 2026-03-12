@@ -58,20 +58,31 @@ export async function createService(name) {
 
   // Connect GitHub repo so Railway knows what to build
   if (config.RAILWAY_WP_REPO) {
-    try {
-      await gql(`
-        mutation ($id: String!, $input: ServiceSourceInput!) {
-          serviceUpdate(id: $id, input: { source: $input }) { id }
-        }
-      `, {
-        id: serviceId,
-        input: {
-          repo: config.RAILWAY_WP_REPO,
-        },
-      });
-    } catch (err) {
-      console.error('Failed to connect repo, will deploy without source:', err.message);
-    }
+    await gql(`
+      mutation ($id: String!, $input: ServiceConnectInput!) {
+        serviceConnect(id: $id, input: $input) { id }
+      }
+    `, {
+      id: serviceId,
+      input: {
+        repo: config.RAILWAY_WP_REPO,
+        branch: 'main',
+      },
+    });
+
+    // Set root Dockerfile path (repo has multiple Dockerfiles)
+    const environmentId = await getEnvironmentId();
+    await gql(`
+      mutation ($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
+        serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input)
+      }
+    `, {
+      serviceId,
+      environmentId,
+      input: {
+        rootDirectory: '/',
+      },
+    });
   }
 
   return data.serviceCreate;
