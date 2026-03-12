@@ -13,6 +13,7 @@ async function gql(query, variables = {}) {
   });
   const json = await res.json();
   if (json.errors) {
+    console.error('Railway API error:', JSON.stringify({ query: query.trim().split('\n')[0], variables, errors: json.errors }));
     throw new Error(`Railway API: ${JSON.stringify(json.errors)}`);
   }
   return json.data;

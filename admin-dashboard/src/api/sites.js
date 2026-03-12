@@ -111,9 +111,13 @@ app.post('/', async (c) => {
   try {
     lastCreateTime = now;
 
+    console.log(`[create-site] Creating database: ${dbName}`);
     await createDatabase(dbName);
+    console.log(`[create-site] Registering site: ${slug}`);
     const siteId = await createSite({ name: name.trim(), slug, dbName, redisPrefix });
+    console.log(`[create-site] Creating Railway service: wp-${slug}`);
     const service = await createService(`wp-${slug}`);
+    console.log(`[create-site] Deploying service: ${service.id}`);
     const { domain } = await deployService(service.id, { dbName, redisPrefix, siteName: slug });
 
     await updateSite(siteId, {
