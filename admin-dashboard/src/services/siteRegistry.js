@@ -26,10 +26,13 @@ export async function createSite({ name, slug, dbName, redisPrefix }) {
 
 export async function deleteSite(id) {
   const pool = getDashboardPool();
-  await pool.query(
-    'UPDATE dashboard_sites SET status = ? WHERE id = ?',
-    ['deleted', id]
-  );
+  await pool.query('DELETE FROM dashboard_sites WHERE id = ?', [id]);
+}
+
+export async function purgeDeletedSites() {
+  const pool = getDashboardPool();
+  const [result] = await pool.query("DELETE FROM dashboard_sites WHERE status = 'deleted'");
+  return result.affectedRows;
 }
 
 export async function updateSite(id, fields) {

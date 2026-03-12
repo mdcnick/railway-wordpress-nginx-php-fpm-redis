@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { createSite, listSites, getSite, updateSite, deleteSite } from '../services/siteRegistry.js';
+import { createSite, listSites, getSite, updateSite, deleteSite, purgeDeletedSites } from '../services/siteRegistry.js';
 import { createDatabase } from '../services/database.js';
 import { createService, deployService, getServiceStatus, deleteService } from '../services/railway.js';
 import { listWpUsers } from '../services/wordpress.js';
@@ -7,6 +7,12 @@ import { listWpUsers } from '../services/wordpress.js';
 const app = new Hono();
 
 let lastCreateTime = 0;
+
+// Purge all soft-deleted sites
+app.delete('/purge', async (c) => {
+  const count = await purgeDeletedSites();
+  return c.json({ purged: count });
+});
 
 // List all sites
 app.get('/', async (c) => {
