@@ -41,6 +41,8 @@ export async function getEnvironmentId() {
 }
 
 export async function createService(name) {
+  // Create empty service first, then connect repo separately
+  // (passing source.repo in serviceCreate causes "Problem processing request")
   const data = await gql(`
     mutation ($input: ServiceCreateInput!) {
       serviceCreate(input: $input) { id name }
@@ -49,9 +51,29 @@ export async function createService(name) {
     input: {
       projectId: config.RAILWAY_PROJECT_ID,
       name,
-      ...(config.RAILWAY_WP_REPO ? { source: { repo: config.RAILWAY_WP_REPO } } : {}),
     },
   });
+
+  const serviceId = data.serviceCreate.id;
+
+  // Connect GitHub repo so Railway knows what to build
+  if (config.RAILWAY_WP_REPO) {
+    try {
+      await gql(`
+        mutation ($id: String!, $input: ServiceSourceInput!) {
+          serviceUpdate(id: $id, input: { source: $input }) { id }
+        }
+      `, {
+        id: serviceId,
+        input: {
+          repo: config.RAILWAY_WP_REPO,
+        },
+      });
+    } catch (err) {
+      console.error('Failed to connect repo, will deploy without source:', err.message);
+    }
+  }
+
   return data.serviceCreate;
 }
 
