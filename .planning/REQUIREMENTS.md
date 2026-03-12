@@ -9,12 +9,12 @@ Requirements for milestone v1.0 — Reliable Site Creation. Each maps to roadmap
 
 ### Pipeline Fix
 
-- [ ] **PIPE-01**: User can create a site and it transitions from provisioning to active (verify triggerDeploy + .railway.com endpoint in production)
-- [ ] **PIPE-02**: Status poller checks for Railway's `ACTIVE` status instead of `SUCCESS`
+- [x] **PIPE-01**: User can create a site and it transitions from provisioning to active (verify triggerDeploy + .railway.com endpoint in production)
+- [x] **PIPE-02**: Status poller checks for Railway's `ACTIVE` status instead of `SUCCESS`
 
 ### Nginx Verification
 
-- [ ] **NGNX-01**: New services are created with `healthcheckPath: '/health'` so Railway verifies Nginx is responding before marking deploy as active
+- [x] **NGNX-01**: New services are created with `healthcheckPath: '/health'` so Railway verifies Nginx is responding before marking deploy as active
 
 ### Failure Handling
 
@@ -50,9 +50,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PIPE-01 | Phase 1 | Pending |
-| PIPE-02 | Phase 1 | Pending |
-| NGNX-01 | Phase 1 | Pending |
+| PIPE-01 | Phase 1 | Complete |
+| PIPE-02 | Phase 1 | Complete |
+| NGNX-01 | Phase 1 | Complete |
 | FAIL-01 | Phase 2 | Pending |
 | FAIL-02 | Phase 2 | Pending |
 

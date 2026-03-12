@@ -12,7 +12,7 @@ Three known bugs are breaking site creation: a wrong Railway API endpoint, a mis
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Fix the Broken Pipeline** - Make end-to-end site creation reach `active` status in production
+- [x] **Phase 1: Fix the Broken Pipeline** - Make end-to-end site creation reach `active` status in production (completed 2026-03-12)
 - [ ] **Phase 2: Harden Failure Modes** - Prevent orphaned services, stuck provisioning, and silent failures
 
 ## Phase Details
@@ -26,7 +26,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The status poller recognizes Railway's `ACTIVE` status and marks the site active (not stuck in provisioning)
   3. New services are created with `healthcheckPath: '/health'` so Railway verifies Nginx is responding before marking a deploy active
   4. The `serviceInstanceRedeploy` call is confirmed as the final step in `deployService()` and protected from regression
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 01-01-PLAN.md — Fix status poller, add healthcheckPath, upgrade /health to PHP-FPM, verify in production
@@ -48,5 +48,5 @@ Phases execute in numeric order: 1 → 2
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Fix the Broken Pipeline | 0/1 | Not started | - |
+| 1. Fix the Broken Pipeline | 1/1 | Complete   | 2026-03-12 |
 | 2. Harden Failure Modes | 0/? | Not started | - |
