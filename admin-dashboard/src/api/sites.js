@@ -14,16 +14,49 @@ app.delete('/purge', async (c) => {
   return c.json({ purged: count });
 });
 
-// List all sites
+// List all sites (auto-checks provisioning statuses)
 app.get('/', async (c) => {
   const sites = await listSites();
+  // Check Railway status for any provisioning sites
+  for (const site of sites) {
+    if (site.status === 'provisioning' && site.railway_service_id) {
+      try {
+        const railwayStatus = await getServiceStatus(site.railway_service_id);
+        console.log(`[status-poller] site ${site.id} railway status: "${railwayStatus}"`);
+        if (railwayStatus === 'SUCCESS') {
+          await updateSite(site.id, { status: 'active' });
+          site.status = 'active';
+        } else if (railwayStatus === 'FAILED' || railwayStatus === 'CRASHED') {
+          await updateSite(site.id, { status: 'error', error_message: `Deployment ${railwayStatus}` });
+          site.status = 'error';
+        }
+      } catch (err) {
+        console.error('Status check error:', err);
+      }
+    }
+  }
   return c.json(sites);
 });
 
-// Get single site
+// Get single site (auto-checks provisioning status)
 app.get('/:id', async (c) => {
   const site = await getSite(c.req.param('id'));
   if (!site) return c.json({ error: 'Not found' }, 404);
+  if (site.status === 'provisioning' && site.railway_service_id) {
+    try {
+      const railwayStatus = await getServiceStatus(site.railway_service_id);
+      console.log(`[status-poller] site ${site.id} railway status: "${railwayStatus}"`);
+      if (railwayStatus === 'SUCCESS') {
+        await updateSite(site.id, { status: 'active' });
+        site.status = 'active';
+      } else if (railwayStatus === 'FAILED' || railwayStatus === 'CRASHED') {
+        await updateSite(site.id, { status: 'error', error_message: `Deployment ${railwayStatus}` });
+        site.status = 'error';
+      }
+    } catch (err) {
+      console.error('Status check error:', err);
+    }
+  }
   return c.json(site);
 });
 

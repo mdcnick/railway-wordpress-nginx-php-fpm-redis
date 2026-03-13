@@ -32,13 +32,14 @@ export default function SiteDetail() {
       const data = await api.getSite(id);
       setSite(data);
       if (data.status === 'active') {
+        clearInterval(pollRef.current);
         try {
           const u = await api.getSiteUsers(id);
           setUsers(u);
           if (u.length > 0 && !selectedUser) setSelectedUser(u[0].user_login);
         } catch {}
       }
-      if (data.status === 'provisioning') startPolling();
+      if (data.status === 'provisioning' && !pollRef.current) startPolling();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -49,13 +50,22 @@ export default function SiteDetail() {
   function startPolling() {
     pollRef.current = setInterval(async () => {
       try {
-        const status = await api.getSiteStatus(id);
-        if (status.status !== 'provisioning') {
+        const data = await api.getSite(id);
+        setSite(data);
+        if (data.status === 'active') {
           clearInterval(pollRef.current);
-          loadSite();
+          pollRef.current = null;
+          try {
+            const u = await api.getSiteUsers(id);
+            setUsers(u);
+            if (u.length > 0 && !selectedUser) setSelectedUser(u[0].user_login);
+          } catch {}
+        } else if (data.status === 'error') {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
         }
       } catch {}
-    }, 5000);
+    }, 3000);
   }
 
   async function handlePasswordReset(e) {

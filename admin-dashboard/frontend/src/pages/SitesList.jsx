@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { Link } from 'react-router-dom';
 import { api, setGetToken } from '../lib/api.js';
@@ -14,18 +14,37 @@ export default function SitesList() {
   const [success, setSuccess] = useState('');
   const [deleting, setDeleting] = useState(null);
   const [purging, setPurging] = useState(false);
+  const pollRef = useRef(null);
 
   useEffect(() => {
     setGetToken(getToken);
     if (isLoaded) {
       loadSites();
     }
+    return () => clearInterval(pollRef.current);
   }, [getToken, isLoaded]);
 
   async function loadSites() {
     try {
       const data = await api.listSites();
       setSites(data);
+      // Auto-poll if any site is still provisioning
+      const hasProvisioning = data.some(s => s.status === 'provisioning');
+      if (hasProvisioning && !pollRef.current) {
+        pollRef.current = setInterval(async () => {
+          try {
+            const fresh = await api.listSites();
+            setSites(fresh);
+            if (!fresh.some(s => s.status === 'provisioning')) {
+              clearInterval(pollRef.current);
+              pollRef.current = null;
+            }
+          } catch {}
+        }, 5000);
+      } else if (!hasProvisioning && pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     } catch (err) {
       setError(err.message);
     } finally {
