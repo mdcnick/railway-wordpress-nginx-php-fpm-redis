@@ -200,7 +200,7 @@ export async function getServiceStatus(serviceId) {
   const data = await gql(`
     query ($serviceId: String!) {
       service(id: $serviceId) {
-        deployments(first: 1, orderBy: { createdAt: DESC }) {
+        deployments(first: 1) {
           edges { node { id status } }
         }
       }
