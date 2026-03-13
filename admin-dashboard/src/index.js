@@ -11,6 +11,7 @@ import { getSite } from './services/siteRegistry.js';
 import sitesApi from './api/sites.js';
 import passwordsApi from './api/passwords.js';
 import authApi from './api/auth.js';
+import webhooksApi from './api/webhooks.js';
 import { clerkAuth } from './middleware/clerkAuth.js';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -29,6 +30,7 @@ app.get('/health', (c) => c.text('ok'));
 
 // Auth info endpoint (no auth required — returns publishable key)
 app.route('/api/auth', authApi);
+app.route('/api/webhooks', webhooksApi);
 
 // Protected API routes
 app.use('/api/*', clerkAuth);
