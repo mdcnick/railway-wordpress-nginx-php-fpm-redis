@@ -13,7 +13,8 @@ async function gql(query, variables = {}) {
   });
 
   if (!res.ok) {
-    throw new Error(`Railway HTTP error: ${res.status} ${res.statusText}`);
+    const body = await res.text().catch(() => '');
+    throw new Error(`Railway HTTP error: ${res.status} ${res.statusText} — ${body}`);
   }
 
   const json = await res.json();
@@ -194,6 +195,8 @@ export async function triggerDeploy(serviceId) {
 }
 
 export async function getServiceStatus(serviceId) {
+  if (!serviceId) return 'no_service';
+  console.log(`[railway] getServiceStatus for serviceId: "${serviceId}"`);
   const data = await gql(`
     query ($serviceId: String!) {
       service(id: $serviceId) {
