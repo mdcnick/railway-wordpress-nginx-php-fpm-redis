@@ -22,5 +22,6 @@ config.MYSQL_PORT = process.env.MYSQL_PORT || 3306;
 config.DASHBOARD_DB_NAME = process.env.DASHBOARD_DB_NAME || 'wp_dashboard';
 config.RAILWAY_ENVIRONMENT_ID = process.env.RAILWAY_ENVIRONMENT_ID || '';
 config.RAILWAY_WP_REPO = process.env.RAILWAY_WP_REPO || '';
+config.RAILWAY_WEBHOOK_SECRET = process.env.RAILWAY_WEBHOOK_SECRET || '';
 
 export default config;

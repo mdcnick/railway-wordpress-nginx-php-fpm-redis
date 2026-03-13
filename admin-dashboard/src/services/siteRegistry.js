@@ -35,6 +35,15 @@ export async function purgeDeletedSites() {
   return result.affectedRows;
 }
 
+export async function getSiteByServiceId(serviceId) {
+  const pool = getDashboardPool();
+  const [rows] = await pool.query(
+    'SELECT * FROM dashboard_sites WHERE railway_service_id = ? AND status != ? LIMIT 1',
+    [serviceId, 'deleted']
+  );
+  return rows[0] || null;
+}
+
 export async function updateSite(id, fields) {
   const pool = getDashboardPool();
   const sets = [];
