@@ -149,8 +149,6 @@ export async function setServiceVariables(serviceId, variables) {
 
 export async function createVolume(serviceId, name, mountPath) {
   const environmentId = await getEnvironmentId();
-
-  // Step 1: Create the volume at the project level
   const data = await gql(`
     mutation ($input: VolumeCreateInput!) {
       volumeCreate(input: $input) { id name }
@@ -158,28 +156,11 @@ export async function createVolume(serviceId, name, mountPath) {
   `, {
     input: {
       projectId: config.RAILWAY_PROJECT_ID,
-      environmentId,
-      mountPath,
-      name,
-    },
-  });
-
-  const volumeId = data.volumeCreate.id;
-
-  // Step 2: Attach the volume to the service instance
-  await gql(`
-    mutation ($input: VolumeInstanceUpdateInput!) {
-      volumeInstanceUpdate(input: $input)
-    }
-  `, {
-    input: {
-      volumeId,
       serviceId,
       environmentId,
       mountPath,
     },
   });
-
   return data.volumeCreate;
 }
 
