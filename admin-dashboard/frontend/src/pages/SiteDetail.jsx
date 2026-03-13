@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { api, setGetToken } from '../lib/api.js';
 import StatusBadge from '../components/StatusBadge.jsx';
+import ShellTerminal from '../components/ShellTerminal.jsx';
 
 export default function SiteDetail() {
   const { id } = useParams();
@@ -183,6 +184,14 @@ export default function SiteDetail() {
             <h3>Provisioning</h3>
             <p className="muted">Your site is being deployed. This usually takes 2-3 minutes.</p>
             <div className="spinner" />
+          </div>
+        )}
+
+        {site.status === 'active' && (
+          <div className="card">
+            <h3>Shell Access</h3>
+            <p className="muted">Interactive shell on the WordPress container</p>
+            <ShellTerminal siteId={id} getToken={getToken} />
           </div>
         )}
 
