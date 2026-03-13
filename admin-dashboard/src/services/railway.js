@@ -216,7 +216,7 @@ export async function getServiceStatus(serviceId) {
 export async function deployService(serviceId, { dbName, redisPrefix, siteName }) {
   // 1. Set environment variables (PORT=80 tells Railway to route to Nginx, not PHP-FPM on 9000)
   await setServiceVariables(serviceId, {
-    PORT:                  '80',
+    PORT:                  '8080',
     WORDPRESS_DB_HOST:     config.MYSQL_HOST,
     WORDPRESS_DB_PORT:     String(config.MYSQL_PORT),
     WORDPRESS_DB_USER:     config.MYSQL_USER,
