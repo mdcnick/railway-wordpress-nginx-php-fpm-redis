@@ -48,7 +48,7 @@ app.get('/:id/status', async (c) => {
   if (site.railway_service_id && site.status === 'provisioning') {
     try {
       const railwayStatus = await getServiceStatus(site.railway_service_id);
-      if (railwayStatus === 'ACTIVE') {
+      if (railwayStatus === 'SUCCESS') {
         await updateSite(site.id, { status: 'active' });
         deployStatus = 'active';
         console.log(`[status-poller] site ${site.id} transitioned to active (Railway: ${railwayStatus})`);
