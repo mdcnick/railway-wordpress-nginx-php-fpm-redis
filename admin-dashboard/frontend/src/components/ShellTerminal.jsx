@@ -14,12 +14,34 @@ export default function ShellTerminal({ siteId, getToken }) {
 
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 14,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      cursorStyle: 'bar',
+      fontSize: 13,
+      fontFamily: "'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
       theme: {
-        background: '#1e1e1e',
-        foreground: '#d4d4d4',
+        background: '#0a0a0b',
+        foreground: '#ececee',
+        cursor: '#d4a847',
+        cursorAccent: '#0a0a0b',
+        selectionBackground: 'rgba(212,168,71,0.2)',
+        black: '#141416',
+        red: '#e05252',
+        green: '#3ec97a',
+        yellow: '#d4a847',
+        blue: '#6b8cff',
+        magenta: '#c678dd',
+        cyan: '#56b6c2',
+        white: '#ececee',
+        brightBlack: '#636370',
+        brightRed: '#eb6b6b',
+        brightGreen: '#86efac',
+        brightYellow: '#e4bc5f',
+        brightBlue: '#8ca8ff',
+        brightMagenta: '#d19de8',
+        brightCyan: '#7dccd6',
+        brightWhite: '#ffffff',
       },
+      lineHeight: 1.4,
+      letterSpacing: 0.5,
     });
 
     const fitAddon = new FitAddon();
@@ -29,7 +51,7 @@ export default function ShellTerminal({ siteId, getToken }) {
     fitAddon.fit();
     termRef.current = term;
 
-    term.writeln('Connecting to container...');
+    term.writeln('\x1b[38;2;212;168;71m Connecting to container...\x1b[0m');
 
     let ws;
 
@@ -42,7 +64,7 @@ export default function ShellTerminal({ siteId, getToken }) {
         wsRef.current = ws;
 
         ws.onopen = () => {
-          term.writeln('Connected.\r\n');
+          term.writeln('\x1b[38;2;62;201;122m Connected.\x1b[0m\r\n');
         };
 
         ws.onmessage = (event) => {
@@ -50,11 +72,11 @@ export default function ShellTerminal({ siteId, getToken }) {
         };
 
         ws.onclose = () => {
-          term.writeln('\r\n[Connection closed]');
+          term.writeln('\r\n\x1b[38;2;99;99;112m[Connection closed]\x1b[0m');
         };
 
         ws.onerror = () => {
-          term.writeln('\r\n[Connection error]');
+          term.writeln('\r\n\x1b[38;2;224;82;82m[Connection error]\x1b[0m');
         };
 
         term.onData((data) => {
@@ -63,7 +85,7 @@ export default function ShellTerminal({ siteId, getToken }) {
           }
         });
       } catch (err) {
-        term.writeln(`\r\n[Auth error: ${err.message}]`);
+        term.writeln(`\r\n\x1b[38;2;224;82;82m[Auth error: ${err.message}]\x1b[0m`);
       }
     })();
 
@@ -78,16 +100,16 @@ export default function ShellTerminal({ siteId, getToken }) {
   }, [siteId, getToken]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '100%',
-        height: 400,
-        background: '#1e1e1e',
-        borderRadius: 8,
-        overflow: 'hidden',
-        padding: 4,
-      }}
-    />
+    <div className="terminal-container">
+      <div
+        ref={containerRef}
+        style={{
+          width: '100%',
+          height: 400,
+          background: '#0a0a0b',
+          padding: 8,
+        }}
+      />
+    </div>
   );
 }

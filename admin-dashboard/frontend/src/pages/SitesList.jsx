@@ -4,28 +4,12 @@ import { Link } from 'react-router-dom';
 import { api, setGetToken } from '../lib/api.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 
-const FILTER_OPTIONS = [
-  { key: 'all', label: 'All' },
+const FILTERS = [
+  { key: 'all', label: 'All Sites' },
   { key: 'active', label: 'Active' },
   { key: 'provisioning', label: 'Provisioning' },
-  { key: 'error', label: 'Error' },
+  { key: 'error', label: 'Errors' },
 ];
-
-function statusDot(status) {
-  const colors = { active: '#22c55e', provisioning: '#eab308', error: '#ef4444' };
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        backgroundColor: colors[status] || '#94a3b8',
-        marginRight: 6,
-      }}
-    />
-  );
-}
 
 export default function SitesList() {
   const { getToken, isLoaded } = useAuth();
@@ -42,9 +26,7 @@ export default function SitesList() {
 
   useEffect(() => {
     setGetToken(getToken);
-    if (isLoaded) {
-      loadSites();
-    }
+    if (isLoaded) loadSites();
     return () => clearInterval(pollRef.current);
   }, [getToken, isLoaded]);
 
@@ -52,7 +34,6 @@ export default function SitesList() {
     try {
       const data = await api.listSites();
       setSites(data);
-      // Auto-poll if any site is still provisioning
       const hasProvisioning = data.some(s => s.status === 'provisioning');
       if (hasProvisioning && !pollRef.current) {
         pollRef.current = setInterval(async () => {
@@ -76,7 +57,9 @@ export default function SitesList() {
     }
   }
 
-  async function handleDelete(site) {
+  async function handleDelete(e, site) {
+    e.preventDefault();
+    e.stopPropagation();
     if (!confirm(`Delete "${site.name}"? This will remove the Railway service and mark the site as deleted.`)) return;
     setDeleting(site.id);
     setError('');
@@ -127,7 +110,7 @@ export default function SitesList() {
   }
 
   const counts = {};
-  for (const opt of FILTER_OPTIONS) {
+  for (const opt of FILTERS) {
     counts[opt.key] = opt.key === 'all' ? sites.length : sites.filter(s => s.status === opt.key).length;
   }
 
@@ -136,96 +119,128 @@ export default function SitesList() {
   return (
     <div>
       <div className="page-header">
-        <h1>WordPress Sites</h1>
-        <span className="badge badge-info">{sites.length} sites</span>
-        <button className="btn btn-outline btn-sm" onClick={handlePurge} disabled={purging}>
-          {purging ? 'Purging...' : 'Purge Deleted'}
-        </button>
+        <h1>Your Sites</h1>
+        <div className="page-header-actions">
+          <button className="btn btn-ghost btn-sm" onClick={handlePurge} disabled={purging}>
+            {purging ? 'Purging...' : 'Purge Deleted'}
+          </button>
+        </div>
       </div>
 
-      <div className="filter-tabs" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {FILTER_OPTIONS.map((opt) => (
-          <button
+      {/* Stat bar / filter */}
+      <div className="stat-bar">
+        {FILTERS.map((opt) => (
+          <div
             key={opt.key}
-            className={`btn btn-sm ${filter === opt.key ? 'btn-primary' : 'btn-outline'}`}
+            className={`stat-item ${filter === opt.key ? 'active' : ''}`}
             onClick={() => setFilter(opt.key)}
           >
-            {opt.label} <span className="badge badge-info" style={{ marginLeft: 4 }}>{counts[opt.key]}</span>
-          </button>
+            <div className="stat-number">{counts[opt.key]}</div>
+            <div className="stat-label">{opt.label}</div>
+          </div>
         ))}
       </div>
 
-      <form className="create-form" onSubmit={handleCreate}>
-        <input
-          type="text"
-          placeholder="New site name (e.g. Acme Corp)"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          disabled={creating}
-          className="input"
-        />
-        <button type="submit" disabled={creating || !newName.trim()} className="btn btn-primary">
-          {creating ? 'Creating...' : 'Create Site'}
-        </button>
-      </form>
+      {/* Create form */}
+      <div className="create-section">
+        <form className="create-form" onSubmit={handleCreate}>
+          <input
+            type="text"
+            placeholder="Enter a name for your new site..."
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            disabled={creating}
+            className="input"
+          />
+          <button type="submit" disabled={creating || !newName.trim()} className="btn btn-primary">
+            {creating ? (
+              <>
+                <span className="spinner-inline" />
+                Creating...
+              </>
+            ) : (
+              'Deploy Site'
+            )}
+          </button>
+        </form>
+      </div>
 
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
       {loading ? (
-        <div className="loading">Loading sites...</div>
+        <div className="loading">
+          <div className="spinner" style={{ margin: '0 auto 1rem' }} />
+          Loading sites...
+        </div>
       ) : sites.length === 0 ? (
         <div className="empty-state">
-          <p>No WordPress sites yet.</p>
-          <p className="muted">Create your first site above to get started.</p>
+          <div className="empty-state-icon">◇</div>
+          <p>No WordPress sites yet</p>
+          <p className="muted">Deploy your first site above to get started.</p>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Slug</th>
-                <th>Status</th>
-                <th>Service ID</th>
-                <th>Domain</th>
-                <th>Custom Domain</th>
-                <th>Created</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSites.map((site) => (
-                <tr key={site.id}>
-                  <td>
-                    {statusDot(site.status)}
-                    <Link to={`/sites/${site.id}`}>{site.name}</Link>
-                  </td>
-                  <td><code>{site.slug}</code></td>
-                  <td><StatusBadge status={site.status} /></td>
-                  <td><code>{site.railway_service_id ? site.railway_service_id.substring(0, 8) : '—'}</code></td>
-                  <td>
+        <div className="sites-grid">
+          {filteredSites.map((site, i) => (
+            <Link
+              to={`/sites/${site.id}`}
+              key={site.id}
+              className="site-card animate-in"
+              style={{ animationDelay: `${0.05 * i}s` }}
+            >
+              <div className="site-card-header">
+                <div>
+                  <div className="site-card-title">{site.name}</div>
+                  <div className="site-card-slug">{site.slug}</div>
+                </div>
+                <StatusBadge status={site.status} />
+              </div>
+
+              <div className="site-card-meta">
+                <div className="site-card-meta-item">
+                  <span className="site-card-meta-label">Domain</span>
+                  <span className="site-card-meta-value">
                     {site.railway_domain ? (
-                      <a href={`https://${site.railway_domain}`} target="_blank" rel="noopener">
+                      <a
+                        href={`https://${site.railway_domain}`}
+                        target="_blank"
+                        rel="noopener"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {site.railway_domain}
                       </a>
                     ) : '—'}
-                  </td>
-                  <td>{site.custom_domain || '—'}</td>
-                  <td>{new Date(site.created_at).toLocaleDateString()}</td>
-                  <td>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleDelete(site)}
-                      disabled={deleting === site.id}
-                    >
-                      {deleting === site.id ? 'Deleting...' : 'Delete'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                </div>
+                <div className="site-card-meta-item">
+                  <span className="site-card-meta-label">Created</span>
+                  <span className="site-card-meta-value">
+                    {new Date(site.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </div>
+                {site.custom_domain && (
+                  <div className="site-card-meta-item">
+                    <span className="site-card-meta-label">Custom</span>
+                    <span className="site-card-meta-value">{site.custom_domain}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="site-card-actions" onClick={(e) => e.preventDefault()}>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={(e) => handleDelete(e, site)}
+                  disabled={deleting === site.id}
+                >
+                  {deleting === site.id ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>
