@@ -213,8 +213,19 @@ export async function getServiceStatus(serviceId) {
 // High-level deploy orchestration
 // ---------------------------------------------------------------------------
 
-export async function deployService(serviceId, { dbName, redisPrefix, siteName }) {
-  // 1. Set environment variables (PORT=80 tells Railway to route to Nginx, not PHP-FPM on 9000)
+/**
+ * Prepare a service (set variables, create volume, allocate domain) without
+ * triggering the actual deployment.  Returns the allocated domain so callers
+ * can persist { railway_service_id, railway_domain } to the database BEFORE
+ * calling triggerDeploy().
+ *
+ * Keeping preparation and trigger separate eliminates a race condition where
+ * Railway fires webhook events (BUILDING, DEPLOYING) before the service ID is
+ * written to the database, causing getSiteByServiceId() to return null and the
+ * webhook to be silently ignored.
+ */
+export async function prepareService(serviceId, { dbName, redisPrefix, siteName }) {
+  // 1. Set environment variables (PORT=8080 tells Railway to route to Nginx)
   await setServiceVariables(serviceId, {
     PORT:                  '8080',
     WORDPRESS_DB_HOST:     config.MYSQL_HOST,
@@ -231,11 +242,18 @@ export async function deployService(serviceId, { dbName, redisPrefix, siteName }
   // 2. Create and attach persistent volume for WordPress files
   await createVolume(serviceId, `${siteName}-volume`, '/var/www/html');
 
-  // 3. Generate a public domain for this service
+  // 3. Allocate a public domain for this service
   const domain = await getServiceDomain(serviceId);
 
-  // 4. Trigger an actual deployment now that config is in place
-  await triggerDeploy(serviceId);
+  return { domain };
+}
 
+/**
+ * @deprecated Use prepareService() + triggerDeploy() separately so the caller
+ * can persist railway_service_id before the deploy fires webhook events.
+ */
+export async function deployService(serviceId, opts) {
+  const { domain } = await prepareService(serviceId, opts);
+  await triggerDeploy(serviceId);
   return { domain };
 }

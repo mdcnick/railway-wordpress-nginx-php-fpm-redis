@@ -4,7 +4,7 @@ import { createSite, listSites, getSite, updateSite, deleteSite, purgeDeletedSit
 const RAILWAY_DONE = new Set(['SUCCESS', 'SLEEPING']);
 const RAILWAY_FAIL = new Set(['FAILED', 'CRASHED', 'REMOVED']);
 import { createDatabase } from '../services/database.js';
-import { createService, deployService, getServiceStatus, deleteService } from '../services/railway.js';
+import { createService, prepareService, triggerDeploy, getServiceStatus, deleteService } from '../services/railway.js';
 import { listWpUsers } from '../services/wordpress.js';
 
 const app = new Hono();
@@ -162,13 +162,22 @@ app.post('/', async (c) => {
     const siteId = await createSite({ name: name.trim(), slug, dbName, redisPrefix });
     console.log(`[create-site] Creating Railway service: wp-${slug}`);
     const service = await createService(`wp-${slug}`);
-    console.log(`[create-site] Deploying service: ${service.id}`);
-    const { domain } = await deployService(service.id, { dbName, redisPrefix, siteName: slug });
+
+    // Prepare the service (set variables, volume, domain) BEFORE triggering
+    // the deploy.  Railway fires webhook events (BUILDING, DEPLOYING) almost
+    // immediately after triggerDeploy() is called.  By writing railway_service_id
+    // to the DB first we ensure getSiteByServiceId() can match those early events
+    // and the site never gets stuck in 'provisioning' due to a race condition.
+    console.log(`[create-site] Preparing service: ${service.id}`);
+    const { domain } = await prepareService(service.id, { dbName, redisPrefix, siteName: slug });
 
     await updateSite(siteId, {
       railway_service_id: service.id,
       railway_domain: domain,
     });
+
+    console.log(`[create-site] Triggering deploy: ${service.id}`);
+    await triggerDeploy(service.id);
 
     return c.json({
       id: siteId,
