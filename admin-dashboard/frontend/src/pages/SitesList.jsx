@@ -4,6 +4,29 @@ import { Link } from 'react-router-dom';
 import { api, setGetToken } from '../lib/api.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 
+const FILTER_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'provisioning', label: 'Provisioning' },
+  { key: 'error', label: 'Error' },
+];
+
+function statusDot(status) {
+  const colors = { active: '#22c55e', provisioning: '#eab308', error: '#ef4444' };
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        backgroundColor: colors[status] || '#94a3b8',
+        marginRight: 6,
+      }}
+    />
+  );
+}
+
 export default function SitesList() {
   const { getToken, isLoaded } = useAuth();
   const [sites, setSites] = useState([]);
@@ -14,6 +37,7 @@ export default function SitesList() {
   const [success, setSuccess] = useState('');
   const [deleting, setDeleting] = useState(null);
   const [purging, setPurging] = useState(false);
+  const [filter, setFilter] = useState('all');
   const pollRef = useRef(null);
 
   useEffect(() => {
@@ -102,6 +126,13 @@ export default function SitesList() {
     }
   }
 
+  const counts = {};
+  for (const opt of FILTER_OPTIONS) {
+    counts[opt.key] = opt.key === 'all' ? sites.length : sites.filter(s => s.status === opt.key).length;
+  }
+
+  const filteredSites = filter === 'all' ? sites : sites.filter(s => s.status === filter);
+
   return (
     <div>
       <div className="page-header">
@@ -110,6 +141,18 @@ export default function SitesList() {
         <button className="btn btn-outline btn-sm" onClick={handlePurge} disabled={purging}>
           {purging ? 'Purging...' : 'Purge Deleted'}
         </button>
+      </div>
+
+      <div className="filter-tabs" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {FILTER_OPTIONS.map((opt) => (
+          <button
+            key={opt.key}
+            className={`btn btn-sm ${filter === opt.key ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setFilter(opt.key)}
+          >
+            {opt.label} <span className="badge badge-info" style={{ marginLeft: 4 }}>{counts[opt.key]}</span>
+          </button>
+        ))}
       </div>
 
       <form className="create-form" onSubmit={handleCreate}>
@@ -144,17 +187,23 @@ export default function SitesList() {
                 <th>Name</th>
                 <th>Slug</th>
                 <th>Status</th>
+                <th>Service ID</th>
                 <th>Domain</th>
+                <th>Custom Domain</th>
                 <th>Created</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {sites.map((site) => (
+              {filteredSites.map((site) => (
                 <tr key={site.id}>
-                  <td><Link to={`/sites/${site.id}`}>{site.name}</Link></td>
+                  <td>
+                    {statusDot(site.status)}
+                    <Link to={`/sites/${site.id}`}>{site.name}</Link>
+                  </td>
                   <td><code>{site.slug}</code></td>
                   <td><StatusBadge status={site.status} /></td>
+                  <td><code>{site.railway_service_id ? site.railway_service_id.substring(0, 8) : '—'}</code></td>
                   <td>
                     {site.railway_domain ? (
                       <a href={`https://${site.railway_domain}`} target="_blank" rel="noopener">
@@ -162,6 +211,7 @@ export default function SitesList() {
                       </a>
                     ) : '—'}
                   </td>
+                  <td>{site.custom_domain || '—'}</td>
                   <td>{new Date(site.created_at).toLocaleDateString()}</td>
                   <td>
                     <button
