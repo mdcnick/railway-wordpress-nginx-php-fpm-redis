@@ -19,6 +19,13 @@ export default function SiteDetail() {
   const [newPassword, setNewPassword] = useState('');
   const [resetting, setResetting] = useState(false);
 
+  const [backups, setBackups] = useState([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [selectedBackup, setSelectedBackup] = useState('');
+  const [restoring, setRestoring] = useState(false);
+  const [restoreResult, setRestoreResult] = useState(null);
+  const [restoreError, setRestoreError] = useState('');
+
   const pollRef = useRef(null);
 
   useEffect(() => {
@@ -38,12 +45,41 @@ export default function SiteDetail() {
           setUsers(u);
           if (u.length > 0 && !selectedUser) setSelectedUser(u[0].user_login);
         } catch {}
+        loadBackups(id);
       }
       if (data.status === 'provisioning' && !pollRef.current) startPolling();
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadBackups(siteId) {
+    setBackupsLoading(true);
+    try {
+      const data = await api.listBackups(siteId || id);
+      setBackups(data.dates || []);
+      if (data.dates && data.dates.length > 0) setSelectedBackup(data.dates[0]);
+    } catch {
+      setBackups([]);
+    } finally {
+      setBackupsLoading(false);
+    }
+  }
+
+  async function handleRestore() {
+    if (!selectedBackup) return;
+    setRestoring(true);
+    setRestoreResult(null);
+    setRestoreError('');
+    try {
+      const result = await api.restoreSite(id, selectedBackup);
+      setRestoreResult(result);
+    } catch (err) {
+      setRestoreError(err.message);
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -235,6 +271,94 @@ export default function SiteDetail() {
                 )}
               </button>
             </form>
+          </div>
+        )}
+
+        {/* Restore from Backup */}
+        {site.status === 'active' && (
+          <div className="card">
+            <div className="card-header">
+              <div className="card-icon" style={{ background: 'rgba(107,140,255,0.12)', color: '#6b8cff' }}>
+                ↺
+              </div>
+              <h3>Restore from Backup</h3>
+            </div>
+
+            {backupsLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div className="spinner-inline" />
+                <span className="muted">Loading backups...</span>
+              </div>
+            ) : backups.length === 0 ? (
+              <p className="muted">No backups found in S3 for this site.</p>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label>Backup Date</label>
+                  <select
+                    className="input"
+                    value={selectedBackup}
+                    onChange={(e) => {
+                      setSelectedBackup(e.target.value);
+                      setRestoreResult(null);
+                      setRestoreError('');
+                    }}
+                  >
+                    {backups.map((date) => (
+                      <option key={date} value={date}>{date}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  className="btn btn-danger"
+                  disabled={restoring || !selectedBackup}
+                  onClick={handleRestore}
+                >
+                  {restoring ? (
+                    <>
+                      <span className="spinner-inline" />
+                      Restoring...
+                    </>
+                  ) : (
+                    'Restore Database'
+                  )}
+                </button>
+
+                {restoreError && (
+                  <div className="alert alert-error" style={{ marginTop: '1rem' }}>
+                    {restoreError}
+                  </div>
+                )}
+
+                {restoreResult && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <div className="alert alert-success">
+                      {restoreResult.message || 'Database restored successfully.'}
+                    </div>
+                    {restoreResult.filesCommand && (
+                      <div style={{ marginTop: '0.75rem' }}>
+                        <p className="muted" style={{ marginBottom: '0.4rem' }}>
+                          Run this command in the Shell Access card below to restore files:
+                        </p>
+                        <pre style={{
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '6px',
+                          padding: '0.75rem',
+                          fontSize: '0.78rem',
+                          overflowX: 'auto',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-all',
+                        }}>
+                          <code>{restoreResult.filesCommand}</code>
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
