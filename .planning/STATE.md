@@ -79,9 +79,10 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 2 | Load all live WP services from DB in dashboard and add shell access | 2026-03-13 | 931b34a | [2-load-all-live-wp-services-from-db-in-das](./quick/2-load-all-live-wp-services-from-db-in-das/) |
 | 3 | Add Railway webhook endpoint for real-time deployment status | 2026-03-13 | 57f30de | [3-add-railway-webhook-endpoint-to-receive-](./quick/3-add-railway-webhook-endpoint-to-receive-/) |
+| 4 | Add restore-from-backup flow to dashboard | 2026-03-17 | f6359b6 | [4-add-restore-from-backup-flow-to-dashboar](./quick/4-add-restore-from-backup-flow-to-dashboar/) |
 
 ## Session Continuity
 
-Last session: 2026-03-13T05:06:56Z
-Stopped at: Completed quick task 3
+Last session: 2026-03-17T00:00:00Z
+Stopped at: Completed quick task 4
 Resume file: None
