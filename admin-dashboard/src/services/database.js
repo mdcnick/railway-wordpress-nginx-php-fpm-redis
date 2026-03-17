@@ -18,13 +18,14 @@ export function getDashboardPool() {
   return dashboardPool;
 }
 
-export async function getSiteConnection(dbName) {
+export async function getSiteConnection(dbName, extraOptions = {}) {
   return mysql.createConnection({
     host: config.MYSQL_HOST,
     port: config.MYSQL_PORT,
     user: config.MYSQL_USER,
     password: config.MYSQL_PASSWORD,
     database: dbName,
+    ...extraOptions,
   });
 }
 

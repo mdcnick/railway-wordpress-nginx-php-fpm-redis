@@ -3,9 +3,12 @@ import { createSite, listSites, getSite, updateSite, deleteSite, purgeDeletedSit
 
 const RAILWAY_DONE = new Set(['SUCCESS', 'SLEEPING']);
 const RAILWAY_FAIL = new Set(['FAILED', 'CRASHED', 'REMOVED']);
-import { createDatabase } from '../services/database.js';
+import { createDatabase, getSiteConnection } from '../services/database.js';
 import { createService, prepareService, triggerDeploy, getServiceStatus, deleteService } from '../services/railway.js';
 import { listWpUsers } from '../services/wordpress.js';
+import { listBackupDates, listBackupFiles, getBackupStream } from '../services/s3.js';
+import { createGunzip } from 'zlib';
+import config from '../config.js';
 
 const app = new Hono();
 
@@ -189,6 +192,99 @@ app.post('/', async (c) => {
   } catch (err) {
     console.error('Site creation error:', err);
     return c.json({ error: err.message || 'Failed to create site' }, 500);
+  }
+});
+
+// List available backup dates for a site
+app.get('/:id/backups', async (c) => {
+  const site = await getSite(c.req.param('id'));
+  if (!site) return c.json({ error: 'Not found' }, 404);
+  try {
+    const dates = await listBackupDates(site.slug);
+    return c.json({ dates });
+  } catch (err) {
+    console.error('[backups] Error listing backup dates:', err);
+    return c.json({ error: err.message || 'Failed to list backups' }, 500);
+  }
+});
+
+// Restore a site from a specific backup date (DB only; files via shell command)
+app.post('/:id/restore', async (c) => {
+  const site = await getSite(c.req.param('id'));
+  if (!site) return c.json({ error: 'Not found' }, 404);
+  if (!site.railway_service_id) {
+    return c.json({ error: 'Site has no Railway service — cannot restore' }, 400);
+  }
+
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const { date } = body;
+  if (!date || typeof date !== 'string') {
+    return c.json({ error: 'date is required' }, 400);
+  }
+
+  try {
+    const files = await listBackupFiles(site.slug, date);
+    if (!files.length) {
+      return c.json({ error: `No backup files found for date: ${date}` }, 404);
+    }
+
+    // Find the SQL dump and files tarball
+    const sqlFile = files.find((f) => f.key.includes('-db-') && f.key.endsWith('.sql.gz'));
+    const tarFile = files.find((f) => f.key.includes('-files-') && f.key.endsWith('.tar.gz'));
+
+    if (!sqlFile) {
+      return c.json({ error: 'No SQL dump found in backup' }, 404);
+    }
+
+    // --- DB Restore ---
+    const stream = await getBackupStream(sqlFile.key);
+    const gunzip = createGunzip();
+
+    // Collect decompressed SQL
+    const sqlChunks = [];
+    await new Promise((resolve, reject) => {
+      stream.pipe(gunzip);
+      gunzip.on('data', (chunk) => sqlChunks.push(chunk));
+      gunzip.on('end', resolve);
+      gunzip.on('error', reject);
+      stream.on('error', reject);
+    });
+
+    const sql = Buffer.concat(sqlChunks).toString('utf8');
+
+    // Execute against the site's MySQL database with multipleStatements enabled
+    const conn = await getSiteConnection(site.db_name, { multipleStatements: true });
+    try {
+      await conn.query('SET FOREIGN_KEY_CHECKS=0;');
+      await conn.query(sql);
+      await conn.query('SET FOREIGN_KEY_CHECKS=1;');
+    } finally {
+      await conn.end();
+    }
+
+    // --- Files: provide shell command ---
+    // TODO: File restore via Railway exec API or S3 sync from within container
+    const filesCommand = tarFile
+      ? `aws s3 cp s3://${config.S3_BACKUP_BUCKET}/${tarFile.key} - | tar xzf - -C /var/www/html/wp-content/`
+      : null;
+
+    return c.json({
+      success: true,
+      dbRestored: true,
+      filesCommand,
+      message: filesCommand
+        ? 'Database restored. Run the filesCommand in Shell Access to restore files.'
+        : 'Database restored. No files tarball found in this backup.',
+    });
+  } catch (err) {
+    console.error('[restore] Error during restore:', err);
+    return c.json({ error: err.message || 'Restore failed' }, 500);
   }
 });
 
