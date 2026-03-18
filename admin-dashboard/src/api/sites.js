@@ -8,6 +8,7 @@ import { createService, prepareService, triggerDeploy, getServiceStatus, deleteS
 import { listWpUsers } from '../services/wordpress.js';
 import { listBackupSources, listBackupDates, listBackupFiles, getBackupStream, getPresignedUrl } from '../services/s3.js';
 import { createGunzip } from 'zlib';
+import { Parser as TarParser } from 'tar';
 import config from '../config.js';
 
 const app = new Hono();
@@ -248,29 +249,78 @@ app.post('/:id/restore', async (c) => {
       return c.json({ error: `No backup files found for date: ${date}` }, 404);
     }
 
-    // Find the SQL dump and files tarball
+    // Find the SQL dump and files tarball.
+    // Support two backup formats:
+    //   1. Split format: separate {slug}-db-{date}.sql.gz and {slug}-files-{date}.tar.gz objects
+    //   2. Combined format: a single backup.tgz containing the SQL dump and files inside the archive
     const sqlFile = files.find((f) => f.key.includes('-db-') && f.key.endsWith('.sql.gz'));
     const tarFile = files.find((f) => f.key.includes('-files-') && f.key.endsWith('.tar.gz'));
+    const combinedTgz = files.find((f) => f.key.endsWith('backup.tgz') || f.key.endsWith('backup.tar.gz'));
 
-    if (!sqlFile) {
+    if (!sqlFile && !combinedTgz) {
       return c.json({ error: 'No SQL dump found in backup' }, 404);
     }
 
-    // --- DB Restore ---
-    const stream = await getBackupStream(sqlFile.key);
-    const gunzip = createGunzip();
+    let sql;
 
-    // Collect decompressed SQL
-    const sqlChunks = [];
-    await new Promise((resolve, reject) => {
-      stream.pipe(gunzip);
-      gunzip.on('data', (chunk) => sqlChunks.push(chunk));
-      gunzip.on('end', resolve);
-      gunzip.on('error', reject);
-      stream.on('error', reject);
-    });
+    if (sqlFile) {
+      // --- Split format: dedicated .sql.gz object ---
+      const stream = await getBackupStream(sqlFile.key);
+      const gunzip = createGunzip();
+      const sqlChunks = [];
+      await new Promise((resolve, reject) => {
+        stream.pipe(gunzip);
+        gunzip.on('data', (chunk) => sqlChunks.push(chunk));
+        gunzip.on('end', resolve);
+        gunzip.on('error', reject);
+        stream.on('error', reject);
+      });
+      sql = Buffer.concat(sqlChunks).toString('utf8');
+    } else {
+      // --- Combined format: extract SQL dump from inside backup.tgz ---
+      const stream = await getBackupStream(combinedTgz.key);
+      const gunzip = createGunzip();
+      const sqlChunks = [];
 
-    const sql = Buffer.concat(sqlChunks).toString('utf8');
+      await new Promise((resolve, reject) => {
+        const parser = new TarParser();
+        let foundSql = false;
+
+        parser.on('entry', (entry) => {
+          const entryPath = entry.path || entry.header?.path || '';
+          const isSql = entryPath.endsWith('.sql') || entryPath.endsWith('.sql.gz');
+          if (isSql && !foundSql) {
+            foundSql = true;
+            if (entryPath.endsWith('.sql.gz')) {
+              const innerGunzip = createGunzip();
+              entry.pipe(innerGunzip);
+              innerGunzip.on('data', (chunk) => sqlChunks.push(chunk));
+              innerGunzip.on('end', () => {});
+              innerGunzip.on('error', reject);
+            } else {
+              entry.on('data', (chunk) => sqlChunks.push(chunk));
+            }
+            entry.resume();
+          } else {
+            entry.resume(); // consume and discard non-SQL entries
+          }
+        });
+
+        parser.on('end', () => {
+          if (sqlChunks.length === 0) {
+            reject(new Error('No SQL dump file found inside backup.tgz'));
+          } else {
+            resolve();
+          }
+        });
+        parser.on('error', reject);
+        stream.on('error', reject);
+
+        stream.pipe(gunzip).pipe(parser);
+      });
+
+      sql = Buffer.concat(sqlChunks).toString('utf8');
+    }
 
     // Execute against the site's MySQL database with multipleStatements enabled
     const conn = await getSiteConnection(site.db_name, { multipleStatements: true });
@@ -284,8 +334,9 @@ app.post('/:id/restore', async (c) => {
 
     // --- Files: provide shell command using presigned URL (no aws CLI needed) ---
     let filesCommand = null;
-    if (tarFile) {
-      const url = await getPresignedUrl(tarFile.key);
+    const filesSource = tarFile || combinedTgz;
+    if (filesSource) {
+      const url = await getPresignedUrl(filesSource.key);
       filesCommand = `curl -sL '${url}' | tar xzf - -C /var/www/html/`;
     }
 
