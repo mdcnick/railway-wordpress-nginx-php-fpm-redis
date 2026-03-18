@@ -2,10 +2,12 @@ import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/clien
 import config from '../config.js';
 
 const s3 = new S3Client({
-  region: config.AWS_REGION,
+  region: config.S3_REGION,
+  endpoint: config.S3_ENDPOINT || undefined,
+  forcePathStyle: true,
   credentials: {
-    accessKeyId: config.AWS_ACCESS_KEY_ID,
-    secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: config.S3_ACCESS_KEY_ID,
+    secretAccessKey: config.S3_SECRET_ACCESS_KEY,
   },
 });
 

@@ -271,7 +271,7 @@ app.post('/:id/restore', async (c) => {
     // --- Files: provide shell command ---
     // TODO: File restore via Railway exec API or S3 sync from within container
     const filesCommand = tarFile
-      ? `aws s3 cp s3://${config.S3_BACKUP_BUCKET}/${tarFile.key} - | tar xzf - -C /var/www/html/wp-content/`
+      ? `aws s3 cp --endpoint-url ${config.S3_ENDPOINT} s3://${config.S3_BACKUP_BUCKET}/${tarFile.key} - | tar xzf - -C /var/www/html/wp-content/`
       : null;
 
     return c.json({

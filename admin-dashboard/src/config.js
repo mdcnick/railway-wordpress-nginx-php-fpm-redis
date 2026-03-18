@@ -6,8 +6,6 @@ const required = [
   'MYSQL_HOST',
   'MYSQL_USER',
   'MYSQL_PASSWORD',
-  'AWS_ACCESS_KEY_ID',
-  'AWS_SECRET_ACCESS_KEY',
 ];
 
 const config = {};
@@ -35,7 +33,11 @@ config.RAILWAY_WEBHOOK_SECRET = process.env.RAILWAY_WEBHOOK_SECRET || '';
 // Falls back to DASHBOARD_URL (public URL) if internal URL is not set.
 config.DASHBOARD_INTERNAL_URL = process.env.DASHBOARD_INTERNAL_URL || '';
 config.DASHBOARD_URL = process.env.DASHBOARD_URL || '';
-config.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+// Railway Object Storage (S3-compatible)
+config.S3_ENDPOINT = process.env.S3_ENDPOINT || '';
+config.S3_REGION = process.env.S3_REGION || 'us-east-1';
+config.S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID || '';
+config.S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY || '';
 config.S3_BACKUP_BUCKET = process.env.S3_BACKUP_BUCKET || 'collapsible-trough-ntbmfs';
 
 export default config;
