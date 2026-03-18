@@ -2,12 +2,12 @@ import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/clien
 import config from '../config.js';
 
 const s3 = new S3Client({
-  region: config.S3_REGION,
-  endpoint: config.S3_ENDPOINT || undefined,
+  region: config.AWS_DEFAULT_REGION,
+  endpoint: config.AWS_ENDPOINT_URL || undefined,
   forcePathStyle: true,
   credentials: {
-    accessKeyId: config.S3_ACCESS_KEY_ID,
-    secretAccessKey: config.S3_SECRET_ACCESS_KEY,
+    accessKeyId: config.AWS_ACCESS_KEY_ID,
+    secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
   },
 });
 
@@ -20,7 +20,7 @@ const s3 = new S3Client({
 export async function listBackupDates(siteSlug) {
   const prefix = `${siteSlug}/`;
   const cmd = new ListObjectsV2Command({
-    Bucket: config.S3_BACKUP_BUCKET,
+    Bucket: config.AWS_S3_BUCKET_NAME,
     Prefix: prefix,
     Delimiter: '/',
   });
@@ -41,7 +41,7 @@ export async function listBackupDates(siteSlug) {
 export async function listBackupFiles(siteSlug, date) {
   const prefix = `${siteSlug}/${date}/`;
   const cmd = new ListObjectsV2Command({
-    Bucket: config.S3_BACKUP_BUCKET,
+    Bucket: config.AWS_S3_BUCKET_NAME,
     Prefix: prefix,
   });
   const res = await s3.send(cmd);
@@ -59,7 +59,7 @@ export async function listBackupFiles(siteSlug, date) {
  */
 export async function getBackupStream(key) {
   const cmd = new GetObjectCommand({
-    Bucket: config.S3_BACKUP_BUCKET,
+    Bucket: config.AWS_S3_BUCKET_NAME,
     Key: key,
   });
   const res = await s3.send(cmd);
