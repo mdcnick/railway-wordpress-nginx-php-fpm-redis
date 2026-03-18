@@ -286,7 +286,7 @@ app.post('/:id/restore', async (c) => {
     let filesCommand = null;
     if (tarFile) {
       const url = await getPresignedUrl(tarFile.key);
-      filesCommand = `curl -sL '${url}' | tar xzf - -C /var/www/html/wp-content/`;
+      filesCommand = `curl -sL '${url}' | tar xzf - -C /var/www/html/`;
     }
 
     return c.json({
