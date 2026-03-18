@@ -19,8 +19,9 @@ export default function SiteDetail() {
   const [newPassword, setNewPassword] = useState('');
   const [resetting, setResetting] = useState(false);
 
-  const [backups, setBackups] = useState([]);
+  const [backupSources, setBackupSources] = useState([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
+  const [selectedSource, setSelectedSource] = useState('');
   const [selectedBackup, setSelectedBackup] = useState('');
   const [restoring, setRestoring] = useState(false);
   const [restoreResult, setRestoreResult] = useState(null);
@@ -59,10 +60,14 @@ export default function SiteDetail() {
     setBackupsLoading(true);
     try {
       const data = await api.listBackups(siteId || id);
-      setBackups(data.dates || []);
-      if (data.dates && data.dates.length > 0) setSelectedBackup(data.dates[0]);
+      const sources = data.sources || [];
+      setBackupSources(sources);
+      if (sources.length > 0) {
+        setSelectedSource(sources[0].name);
+        if (sources[0].dates.length > 0) setSelectedBackup(sources[0].dates[0]);
+      }
     } catch {
-      setBackups([]);
+      setBackupSources([]);
     } finally {
       setBackupsLoading(false);
     }
@@ -74,7 +79,7 @@ export default function SiteDetail() {
     setRestoreResult(null);
     setRestoreError('');
     try {
-      const result = await api.restoreSite(id, selectedBackup);
+      const result = await api.restoreSite(id, selectedSource, selectedBackup);
       setRestoreResult(result);
     } catch (err) {
       setRestoreError(err.message);
@@ -289,30 +294,59 @@ export default function SiteDetail() {
                 <div className="spinner-inline" />
                 <span className="muted">Loading backups...</span>
               </div>
-            ) : backups.length === 0 ? (
-              <p className="muted">No backups found in S3 for this site.</p>
+            ) : backupSources.length === 0 ? (
+              <p className="muted">No backups found in bucket.</p>
             ) : (
               <>
                 <div className="form-group">
-                  <label>Backup Date</label>
+                  <label>Backup Source</label>
                   <select
                     className="input"
-                    value={selectedBackup}
+                    value={selectedSource}
                     onChange={(e) => {
-                      setSelectedBackup(e.target.value);
+                      const src = e.target.value;
+                      setSelectedSource(src);
                       setRestoreResult(null);
                       setRestoreError('');
+                      const found = backupSources.find((s) => s.name === src);
+                      if (found && found.dates.length > 0) setSelectedBackup(found.dates[0]);
+                      else setSelectedBackup('');
                     }}
                   >
-                    {backups.map((date) => (
-                      <option key={date} value={date}>{date}</option>
+                    {backupSources.map((s) => (
+                      <option key={s.name} value={s.name}>{s.name}</option>
                     ))}
                   </select>
                 </div>
 
+                {selectedSource && (() => {
+                  const src = backupSources.find((s) => s.name === selectedSource);
+                  const dates = src ? src.dates : [];
+                  return dates.length > 0 ? (
+                    <div className="form-group">
+                      <label>Backup Date</label>
+                      <select
+                        className="input"
+                        value={selectedBackup}
+                        onChange={(e) => {
+                          setSelectedBackup(e.target.value);
+                          setRestoreResult(null);
+                          setRestoreError('');
+                        }}
+                      >
+                        {dates.map((date) => (
+                          <option key={date} value={date}>{date}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <p className="muted">No dates available for this source.</p>
+                  );
+                })()}
+
                 <button
                   className="btn btn-danger"
-                  disabled={restoring || !selectedBackup}
+                  disabled={restoring || !selectedBackup || !selectedSource}
                   onClick={handleRestore}
                 >
                   {restoring ? (

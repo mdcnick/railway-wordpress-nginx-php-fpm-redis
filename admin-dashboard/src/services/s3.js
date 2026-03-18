@@ -12,6 +12,19 @@ const s3 = new S3Client({
 });
 
 /**
+ * List all backup sources (top-level prefixes) in the bucket.
+ * @returns {Promise<string[]>}
+ */
+export async function listBackupSources() {
+  const cmd = new ListObjectsV2Command({
+    Bucket: config.AWS_S3_BUCKET_NAME,
+    Delimiter: '/',
+  });
+  const res = await s3.send(cmd);
+  return (res.CommonPrefixes || []).map((p) => p.Prefix.replace(/\/$/, '')).sort();
+}
+
+/**
  * List available backup dates for a site slug.
  * Returns date strings sorted descending (newest first).
  * @param {string} siteSlug

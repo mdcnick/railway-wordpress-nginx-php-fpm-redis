@@ -6,7 +6,7 @@ const RAILWAY_FAIL = new Set(['FAILED', 'CRASHED', 'REMOVED']);
 import { createDatabase, getSiteConnection } from '../services/database.js';
 import { createService, prepareService, triggerDeploy, getServiceStatus, deleteService } from '../services/railway.js';
 import { listWpUsers } from '../services/wordpress.js';
-import { listBackupDates, listBackupFiles, getBackupStream } from '../services/s3.js';
+import { listBackupSources, listBackupDates, listBackupFiles, getBackupStream } from '../services/s3.js';
 import { createGunzip } from 'zlib';
 import config from '../config.js';
 
@@ -195,15 +195,26 @@ app.post('/', async (c) => {
   }
 });
 
-// List available backup dates for a site
+// List all backup sources and their dates
 app.get('/:id/backups', async (c) => {
   const site = await getSite(c.req.param('id'));
   if (!site) return c.json({ error: 'Not found' }, 404);
   try {
-    const dates = await listBackupDates(site.slug);
-    return c.json({ dates });
+    const source = c.req.query('source');
+    if (source) {
+      const dates = await listBackupDates(source);
+      return c.json({ sources: [{ name: source, dates }] });
+    }
+    const sources = await listBackupSources();
+    const results = await Promise.all(
+      sources.map(async (name) => ({
+        name,
+        dates: await listBackupDates(name),
+      }))
+    );
+    return c.json({ sources: results.filter((s) => s.dates.length > 0) });
   } catch (err) {
-    console.error('[backups] Error listing backup dates:', err);
+    console.error('[backups] Error listing backups:', err);
     return c.json({ error: err.message || 'Failed to list backups' }, 500);
   }
 });
@@ -223,13 +234,16 @@ app.post('/:id/restore', async (c) => {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { date } = body;
+  const { date, source } = body;
   if (!date || typeof date !== 'string') {
     return c.json({ error: 'date is required' }, 400);
   }
+  if (!source || typeof source !== 'string') {
+    return c.json({ error: 'source is required (backup folder name)' }, 400);
+  }
 
   try {
-    const files = await listBackupFiles(site.slug, date);
+    const files = await listBackupFiles(source, date);
     if (!files.length) {
       return c.json({ error: `No backup files found for date: ${date}` }, 404);
     }

@@ -30,6 +30,6 @@ export const api = {
   resetPassword: (siteId, data) =>
     apiFetch(`/passwords/${siteId}/reset`, { method: 'POST', body: JSON.stringify(data) }),
   listBackups: (siteId) => apiFetch(`/sites/${siteId}/backups`),
-  restoreSite: (siteId, date) =>
-    apiFetch(`/sites/${siteId}/restore`, { method: 'POST', body: JSON.stringify({ date }) }),
+  restoreSite: (siteId, source, date) =>
+    apiFetch(`/sites/${siteId}/restore`, { method: 'POST', body: JSON.stringify({ source, date }) }),
 };
