@@ -6,7 +6,7 @@ const RAILWAY_FAIL = new Set(['FAILED', 'CRASHED', 'REMOVED']);
 import { createDatabase, getSiteConnection } from '../services/database.js';
 import { createService, prepareService, triggerDeploy, getServiceStatus, deleteService } from '../services/railway.js';
 import { listWpUsers } from '../services/wordpress.js';
-import { listBackupSources, listBackupDates, listBackupFiles, getBackupStream } from '../services/s3.js';
+import { listBackupSources, listBackupDates, listBackupFiles, getBackupStream, getPresignedUrl } from '../services/s3.js';
 import { createGunzip } from 'zlib';
 import config from '../config.js';
 
@@ -282,11 +282,12 @@ app.post('/:id/restore', async (c) => {
       await conn.end();
     }
 
-    // --- Files: provide shell command ---
-    // TODO: File restore via Railway exec API or S3 sync from within container
-    const filesCommand = tarFile
-      ? `aws s3 cp --endpoint-url ${config.AWS_ENDPOINT_URL} s3://${config.AWS_S3_BUCKET_NAME}/${tarFile.key} - | tar xzf - -C /var/www/html/wp-content/`
-      : null;
+    // --- Files: provide shell command using presigned URL (no aws CLI needed) ---
+    let filesCommand = null;
+    if (tarFile) {
+      const url = await getPresignedUrl(tarFile.key);
+      filesCommand = `curl -sL '${url}' | tar xzf - -C /var/www/html/wp-content/`;
+    }
 
     return c.json({
       success: true,

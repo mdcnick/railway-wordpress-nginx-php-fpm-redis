@@ -1,4 +1,5 @@
 import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import config from '../config.js';
 
 const s3 = new S3Client({
@@ -77,4 +78,17 @@ export async function getBackupStream(key) {
   });
   const res = await s3.send(cmd);
   return res.Body;
+}
+
+/**
+ * Get a presigned URL for an S3 object (valid 1 hour).
+ * @param {string} key  Full S3 key
+ * @returns {Promise<string>}
+ */
+export async function getPresignedUrl(key) {
+  const cmd = new GetObjectCommand({
+    Bucket: config.AWS_S3_BUCKET_NAME,
+    Key: key,
+  });
+  return getSignedUrl(s3, cmd, { expiresIn: 3600 });
 }
