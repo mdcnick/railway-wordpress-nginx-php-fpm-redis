@@ -94,7 +94,14 @@ if (defined('WP_CACHE') && WP_CACHE && !is_admin()) {
 CACHEEOF
 fi
 
-# 5. Inject custom wp-config.php modifications
+# 5. Ensure health check script exists inside the WordPress volume.
+cat > /var/www/html/health.php << 'HEALTHEOF'
+<?php
+header('Content-Type: application/json');
+echo '{"status":"ok"}';
+HEALTHEOF
+
+# 6. Inject custom wp-config.php modifications
 echo "Configuring wp-config.php..."
 if [ -f /var/www/html/wp-config.php ]; then
     # Check if our custom config is already injected

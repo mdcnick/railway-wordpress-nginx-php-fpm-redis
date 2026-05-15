@@ -105,7 +105,7 @@ export async function createService(name) {
     `, {
       serviceId,
       environmentId,
-      input: { rootDirectory: '/' },
+      input: { rootDirectory: '/', healthcheckPath: '/health' },
     });
   }
 

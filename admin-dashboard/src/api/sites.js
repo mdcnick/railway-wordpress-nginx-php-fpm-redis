@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { createSite, listSites, getSite, updateSite, deleteSite, purgeDeletedSites } from '../services/siteRegistry.js';
 
-const RAILWAY_DONE = new Set(['SUCCESS', 'SLEEPING']);
+const RAILWAY_DONE = new Set(['ACTIVE', 'SUCCESS', 'SLEEPING']);
 const RAILWAY_FAIL = new Set(['FAILED', 'CRASHED', 'REMOVED']);
 import { createDatabase, getSiteConnection } from '../services/database.js';
 import { createService, prepareService, triggerDeploy, getServiceStatus, deleteService } from '../services/railway.js';
@@ -53,12 +53,14 @@ app.get('/:id', async (c) => {
     try {
       const railwayStatus = await getServiceStatus(site.railway_service_id);
       console.log(`[status-poller] site ${site.id} railway status: "${railwayStatus}"`);
-      if (railwayStatus === 'SUCCESS') {
+      if (RAILWAY_DONE.has(railwayStatus)) {
         await updateSite(site.id, { status: 'active' });
         site.status = 'active';
-      } else if (railwayStatus === 'FAILED' || railwayStatus === 'CRASHED') {
+        console.log(`[status-poller] site ${site.id} transitioned to active (Railway: ${railwayStatus})`);
+      } else if (RAILWAY_FAIL.has(railwayStatus)) {
         await updateSite(site.id, { status: 'error', error_message: `Deployment ${railwayStatus}` });
         site.status = 'error';
+        console.log(`[status-poller] site ${site.id} error (Railway: ${railwayStatus})`);
       }
     } catch (err) {
       console.error('Status check error:', err);

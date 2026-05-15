@@ -5,7 +5,7 @@ import { getSiteByServiceId, updateSite } from '../services/siteRegistry.js';
 const app = new Hono();
 
 // Status mapping: Railway deployment status -> site status
-const STATUS_ACTIVE = new Set(['SUCCESS', 'SLEEPING']);
+const STATUS_ACTIVE = new Set(['ACTIVE', 'SUCCESS', 'SLEEPING']);
 const STATUS_ERROR = new Set(['FAILED', 'CRASHED', 'REMOVED']);
 // Everything else (BUILDING, DEPLOYING, QUEUED, WAITING, etc.) = keep provisioning
 

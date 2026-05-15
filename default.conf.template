@@ -50,10 +50,12 @@ server {
     }
 
     # Health check endpoint
-    location /health {
+    location = /health {
         access_log off;
-        return 200 "healthy\n";
-        add_header Content-Type text/plain;
+        include fastcgi_params;
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_param SCRIPT_FILENAME $document_root/health.php;
+        fastcgi_param SCRIPT_NAME /health.php;
     }
 
     # Deny access to hidden files
