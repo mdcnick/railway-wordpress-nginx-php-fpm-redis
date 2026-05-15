@@ -55,7 +55,9 @@ Visitor Request
 - Query strings with dynamic indicators (`s=`, `cart`, `checkout`, etc.)
 - WordPress admin, login, cron endpoints
 
-**Storage:** `/var/cache/nginx` — **mount a Railway Volume here for persistence across deploys!**
+**Storage:** `wp-content/cache/nginx/` — **inside the WordPress volume** (already persistent on Railway!)
+
+> **Why not `/var/cache/nginx`?** Railway gives each service exactly one volume at `/var/www/html`. Putting the NGINX cache inside `wp-content/cache/nginx/` means it persists across deploys automatically — no extra volume needed.
 
 ### Layer 2: WordPress File Cache (Plugin-Level)
 
@@ -94,8 +96,7 @@ Visitor Request
 | `nginx.conf` | Added FastCGI cache zone + bypass map |
 | `default.conf.template` | Added FastCGI cache directives to PHP location |
 | `cache-system/railway-cache-manager.php` | MU plugin — cache invalidation, admin UI, WP-CLI |
-| `cache-system/nginx-purge.php` | Internal purge endpoint for NGINX cache |
-| `cache-system/advanced-cache.php` | WordPress drop-in — PHP-level page cache |
+| `cache-system/advanced-cache.php` | WordPress drop-in — PHP-level page cache fallback |
 | `docker-entrypoint.sh` | Sets up cache dirs, installs files, enables WP_CACHE |
 | `Dockerfile` | Copies cache system into image |
 | `wp-config-custom.php` | Enhanced with cache constants |
@@ -108,16 +109,11 @@ Visitor Request
 2. In Railway, create a new project from your forked repo
 3. The cache system will be automatically installed on container start
 
-### Step 2: Add a Persistent Volume (CRITICAL!)
+### Step 2: Volume Setup (Already Done by Template!)
 
-Without a volume, your cache is lost on every deploy.
+**Good news:** The Railway template **already** creates a persistent volume at `/var/www/html`. Since the cache system stores NGINX cache files inside `wp-content/cache/nginx/` (within the WordPress volume), your cache persists automatically across deploys — **no extra volume needed.**
 
-1. In your Railway dashboard, go to the **WordPress + Nginx** service
-2. Click **Volumes** → **New Volume**
-3. Mount path: `/var/cache/nginx`
-4. Size: Start with 5GB (adjust as needed)
-
-This ensures NGINX cache files persist across container restarts and redeploys.
+The cache directories are created by `docker-entrypoint.sh` on every container start if they don't exist.
 
 ### Step 3: Install Redis Object Cache Plugin
 
@@ -134,8 +130,8 @@ This ensures NGINX cache files persist across container restarts and redeploys.
 # SSH into your Railway container (via Railway CLI or dashboard)
 railway connect
 
-# Check cache directory
-ls -la /var/cache/nginx
+# Check cache directory (inside WordPress volume)
+ls -la /var/www/html/wp-content/cache/nginx/
 
 # You should see hashed subdirectories with cache files
 ```
@@ -201,11 +197,67 @@ When you publish a post, this happens:
 
 1. **Railway Cache Manager** (MU plugin) detects the `save_post` action
 2. It collects all affected URLs: the post itself, homepage, category archives, tag archives, author archive, feeds
-3. It sends a purge request to the internal NGINX purge endpoint
-4. The purge endpoint calculates the MD5 hash of each URL's cache key and deletes the file
-5. As a fallback, it also clears any WordPress file cache entries
+3. It calculates the MD5 hash of each URL's NGINX cache key (`$scheme$request_method$host$request_uri`)
+4. It directly deletes the cache files from `wp-content/cache/nginx/` by their hash path
+5. It also clears any WordPress file cache entries for the same URLs
 
 This ensures visitors never see stale content after you make changes.
+
+## How It Works on Railway
+
+### Understanding Volumes on Railway
+
+The Railway WordPress template gives each service **one persistent volume**. For the WordPress + Nginx service:
+
+| Location | Type | Persists? |
+|----------|------|-----------|
+| `/var/www/html` | **Volume** | **Yes** — survives redeploys |
+| `/var/www/html/wp-content/cache/nginx/` | **Inside volume** | **Yes** — cache persists! |
+| `/var/www/html/wp-content/mu-plugins/` | **Inside volume** | **Yes** — plugins persist |
+| `/var/cache/nginx` | Container filesystem | **No** — wiped on redeploy |
+| `/usr/local/share/` | Container filesystem | **No** — image-only |
+
+### Why This Matters for Cloning
+
+When you **clone** a service on Railway, you get:
+- ✅ Same Docker image
+- ✅ Same environment variables
+- ✅ Fresh **empty** volume (old volume is NOT cloned)
+
+**The cache system handles this gracefully** because `docker-entrypoint.sh`:
+1. Creates cache directories on the fresh volume
+2. Re-installs the MU plugin from the Docker image
+3. Re-installs `advanced-cache.php` from the Docker image
+4. Ensures `WP_CACHE` is enabled in `wp-config.php`
+
+**But your WordPress content** (posts, themes, plugins, uploads) is NOT cloned — it's on the original volume. To clone properly, you need to either:
+- Export/import WordPress content via Tools → Export/Import
+- Use WP-CLI: `wp db export` and `wp db import`
+- Copy the volume data via Railway's backup/restore
+
+### How the Cache System Survives Redeploys
+
+The cache files are stored on the persistent WordPress volume:
+
+```
+/var/www/html/wp-content/cache/
+├── nginx/               ← NGINX FastCGI cache (persistent!)
+├── railway-page/        ← WordPress file cache (persistent!)
+└── railway-config.php   ← Cache configuration (persistent!)
+```
+
+When you redeploy, the container is rebuilt but the volume stays. Cache files survive. The only thing that resets is **in-memory** state (Redis, OPcache).
+
+### How It Handles Fresh Deploys
+
+On a brand-new Railway project:
+1. Container starts with empty `/var/www/html`
+2. `docker-entrypoint.sh` installs WordPress core
+3. `docker-entrypoint.sh` copies cache system files from image to volume
+4. `docker-entrypoint.sh` creates cache directories
+5. `docker-entrypoint.sh` enables `WP_CACHE` in `wp-config.php`
+6. First visitor triggers cache creation
+7. Subsequent visitors get served from cache
 
 ## How It Compares to Breeze
 
@@ -252,14 +304,16 @@ Logged-in user caching is disabled by default because it adds complexity. If you
 ## Troubleshooting
 
 ### Cache is always MISS
-- Check that Volume is mounted at `/var/cache/nginx`
-- Verify `www-data` owns the cache directory: `chown -R www-data:www-data /var/cache/nginx`
+- Check the cache directory exists: `ls -la /var/www/html/wp-content/cache/nginx/`
+- Verify `www-data` owns it: `chown -R www-data:www-data /var/www/html/wp-content/cache/`
 - Check you're not logged in (logged-in users bypass cache by design)
 - Check for cookies that trigger bypass rules
+- Check the `X-Cache-Status` response header — if it shows `BYPASS`, you're hitting a bypass rule
 
 ### Cache not persisting across deploys
-- You forgot to add the Railway Volume at `/var/cache/nginx`
-- Container filesystem is ephemeral — volumes are required for persistence
+- Railway volume not attached? Check Railway dashboard → Service → Volumes → should show `/var/www/html`
+- The NGINX cache lives at `/var/www/html/wp-content/cache/nginx/` (inside the volume)
+- If the volume is attached but cache is still gone, check `docker-entrypoint.sh` ran successfully
 
 ### Redis not connecting
 - Check environment variables: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`

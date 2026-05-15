@@ -279,7 +279,8 @@ class Railway_Cache_Manager
      */
     private function purge_nginx_cache_all(): void
     {
-        $cache_path = '/var/cache/nginx';
+        // NGINX cache lives inside the WordPress volume for persistence on Railway
+        $cache_path = WP_CONTENT_DIR . '/cache/nginx';
 
         if (!is_dir($cache_path)) {
             return;
@@ -296,29 +297,24 @@ class Railway_Cache_Manager
 
     /**
      * Purge NGINX cache for a specific URL by calculating the cache key hash
-     * NGINX cache file path: /var/cache/nginx/{md5[0]}/{md5[1..2]}/{md5}
+     * NGINX cache file path: /wp-content/cache/nginx/{md5[0]}/{md5[1..2]}/{md5}
      * where md5 = md5("$scheme$request_method$host$request_uri")
      */
     private function purge_nginx_cache_url(string $url): bool
     {
-        $cache_path = '/var/cache/nginx';
-
-        $parsed = parse_url($url);
-        if (!$parsed) return false;
-
-        $scheme = ($parsed['scheme'] ?? 'https') . 'GET';
-        $host = $parsed['host'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost');
-        $path = ($parsed['path'] ?? '/') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
-
-        // Try both with and without trailing slash
-        $variants = [
-            $scheme . $host . $path,
-            rtrim($scheme . $host . $path, '/') . '/',
-            rtrim($scheme . $host . $path, '/'),
-        ];
-
+        $cache_path = WP_CONTENT_DIR . '/cache/nginx';
         $found = false;
-        foreach ($variants as $cache_key) {
+
+        foreach ($this->get_url_variants($url) as $variant) {
+            $parsed = parse_url($variant);
+            if (!$parsed) {
+                continue;
+            }
+
+            $scheme = ($parsed['scheme'] ?? 'https') . 'GET';
+            $host = $parsed['host'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $path = ($parsed['path'] ?? '/') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+            $cache_key = $scheme . $host . $path;
             $md5 = md5($cache_key);
             $file = $cache_path . '/' . substr($md5, 0, 1) . '/' . substr($md5, 1, 2) . '/' . $md5;
 
@@ -345,32 +341,7 @@ class Railway_Cache_Manager
      */
     public function purge_nginx_cache_direct(string $url): bool
     {
-        $cache_path = '/var/cache/nginx';
-
-        $parsed = parse_url($url);
-        if (!$parsed) return false;
-
-        $scheme = ($parsed['scheme'] ?? 'https') . 'GET';
-        $host = $parsed['host'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost');
-        $path = ($parsed['path'] ?? '/') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
-
-        $variants = [
-            $scheme . $host . $path,
-            rtrim($scheme . $host . $path, '/') . '/',
-            rtrim($scheme . $host . $path, '/'),
-        ];
-
-        foreach ($variants as $cache_key) {
-            $md5 = md5($cache_key);
-            $file = $cache_path . '/' . substr($md5, 0, 1) . '/' . substr($md5, 1, 2) . '/' . $md5;
-
-            if (file_exists($file)) {
-                @unlink($file);
-                return true;
-            }
-        }
-
-        return false;
+        return $this->purge_nginx_cache_url($url);
     }
 
     // ============================================
@@ -403,12 +374,18 @@ class Railway_Cache_Manager
      */
     private function purge_wordpress_file_cache_for_url(string $url): void
     {
-        $hash = sha1($url);
-        $file = $this->cache_dir . substr($hash, 0, 2) . '/' . $hash . '.html';
-        $gzip = $file . '.gz';
+        foreach ($this->get_url_variants($url) as $variant) {
+            $hash = sha1($variant);
+            $file = $this->cache_dir . substr($hash, 0, 2) . '/' . $hash . '.cache';
 
-        @unlink($file);
-        @unlink($gzip);
+            @unlink($file);
+            @unlink($file . '.gz');
+
+            // Remove stale files created by earlier builds that used .html.
+            $legacy_file = $this->cache_dir . substr($hash, 0, 2) . '/' . $hash . '.html';
+            @unlink($legacy_file);
+            @unlink($legacy_file . '.gz');
+        }
     }
 
     // ============================================
@@ -551,11 +528,46 @@ class Railway_Cache_Manager
     }
 
     /**
+     * Return URL variants that may have been cached behind Railway's TLS proxy.
+     * WordPress permalinks are usually https://, while the container may see
+     * http:// unless X-Forwarded-Proto was propagated correctly.
+     */
+    private function get_url_variants(string $url): array
+    {
+        $parsed = parse_url($url);
+        if (!$parsed) {
+            return [];
+        }
+
+        $scheme = strtolower($parsed['scheme'] ?? 'https');
+        $host = $parsed['host'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+        $authority = $host . $port;
+        $path = $parsed['path'] ?? '/';
+        $path = $path === '' ? '/' : $path;
+        $query = isset($parsed['query']) ? '?' . $parsed['query'] : '';
+
+        $schemes = $scheme === 'https' ? ['https', 'http'] : ['http', 'https'];
+        $path_variants = $path === '/'
+            ? ['/']
+            : array_unique([$path, rtrim($path, '/') . '/', rtrim($path, '/')]);
+
+        $variants = [];
+        foreach ($schemes as $variant_scheme) {
+            foreach ($path_variants as $variant_path) {
+                $variants[] = $variant_scheme . '://' . $authority . $variant_path . $query;
+            }
+        }
+
+        return array_values(array_unique($variants));
+    }
+
+    /**
      * Get cache status
      */
     private function get_cache_status(): string
     {
-        $nginx_cache = '/var/cache/nginx';
+        $nginx_cache = WP_CONTENT_DIR . '/cache/nginx';
         $file_count = 0;
 
         if (is_dir($nginx_cache)) {
@@ -624,7 +636,7 @@ class Railway_Cache_CLI
      */
     public function stats(): void
     {
-        $nginx_cache = '/var/cache/nginx';
+        $nginx_cache = WP_CONTENT_DIR . '/cache/nginx';
         $file_count = 0;
         $total_size = 0;
 

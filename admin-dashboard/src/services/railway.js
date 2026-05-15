@@ -32,6 +32,40 @@ async function gql(query, variables = {}) {
   return json.data;
 }
 
+function firstEnv(...keys) {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (typeof value === 'string' && value !== '') {
+      return value;
+    }
+  }
+  return '';
+}
+
+function resolveRedisConfig() {
+  let urlHost = '';
+  let urlPort = '';
+  let urlPassword = '';
+
+  const redisUrl = firstEnv('REDIS_URL', 'REDIS_PRIVATE_URL', 'REDIS_PUBLIC_URL');
+  if (redisUrl) {
+    try {
+      const parsed = new URL(redisUrl);
+      urlHost = parsed.hostname || '';
+      urlPort = parsed.port || '';
+      urlPassword = parsed.password ? decodeURIComponent(parsed.password) : '';
+    } catch (error) {
+      console.warn(`[railway] Invalid REDIS_URL value: ${redisUrl}`);
+    }
+  }
+
+  return {
+    host: firstEnv('REDIS_HOST', 'REDISHOST') || urlHost,
+    port: firstEnv('REDIS_PORT', 'REDISPORT') || urlPort || '6379',
+    password: firstEnv('REDIS_PASSWORD', 'REDISPASSWORD') || urlPassword,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
@@ -228,6 +262,8 @@ export async function getServiceStatus(serviceId) {
  * webhook to be silently ignored.
  */
 export async function prepareService(serviceId, { dbName, redisPrefix, siteName }) {
+  const redis = resolveRedisConfig();
+
   // 1. Set environment variables (PORT=8080 tells Railway to route to Nginx)
   await setServiceVariables(serviceId, {
     PORT:                  '8080',
@@ -236,9 +272,9 @@ export async function prepareService(serviceId, { dbName, redisPrefix, siteName 
     WORDPRESS_DB_USER:     config.MYSQL_USER,
     WORDPRESS_DB_PASSWORD: config.MYSQL_PASSWORD,
     WORDPRESS_DB_NAME:     dbName,
-    REDIS_HOST:            process.env.REDIS_HOST     || '',
-    REDIS_PORT:            process.env.REDIS_PORT     || '6379',
-    REDIS_PASSWORD:        process.env.REDIS_PASSWORD || '',
+    REDIS_HOST:            redis.host || '',
+    REDIS_PORT:            redis.port || '6379',
+    REDIS_PASSWORD:        redis.password || '',
     WP_REDIS_PREFIX:       redisPrefix,
   });
 

@@ -24,11 +24,7 @@ export NGINX_CLIENT_MAX_BODY_SIZE="${NGINX_CLIENT_MAX_BODY_SIZE:-256M}"
 mkdir -p /etc/nginx/conf.d
 envsubst '${NGINX_CLIENT_MAX_BODY_SIZE}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
 
-# 3. Test nginx configuration
-echo "Testing nginx configuration..."
-nginx -t
-
-# 4. Initialize WordPress files in volume (call original WP entrypoint)
+# 3. Initialize WordPress files in volume (call original WP entrypoint)
 echo "Initializing WordPress..."
 docker-entrypoint.sh php-fpm -t
 
@@ -38,19 +34,17 @@ docker-entrypoint.sh php-fpm -t
 
 echo "Setting up Railway Hybrid Cache System..."
 
-# Create cache directories with proper permissions
-mkdir -p /var/cache/nginx
+# Create cache directories inside the WordPress volume (persistent!)
+# Railway gives ONE volume per service at /var/www/html
+# All cache lives inside wp-content/cache/ so it persists across deploys
+mkdir -p /var/www/html/wp-content/cache/nginx
 mkdir -p /var/www/html/wp-content/cache/railway-page
-mkdir -p /var/www/html/wp-content/cache/railway-config
 mkdir -p /var/www/html/wp-content/mu-plugins
 
-# Set ownership for nginx cache (www-data needs write access)
-chown -R www-data:www-data /var/cache/nginx
-chmod 755 /var/cache/nginx
-
-# Set ownership for WordPress cache directories
-chown -R www-data:www-data /var/www/html/wp-content/cache
-chmod 755 /var/www/html/wp-content/cache
+# Set ownership for runtime-created cache paths only. Avoid recursively
+# chowning the whole WordPress volume on every clone/startup.
+chown -R www-data:www-data /var/www/html/wp-content/cache /var/www/html/wp-content/mu-plugins
+chmod 755 /var/www/html/wp-content/cache /var/www/html/wp-content/cache/nginx /var/www/html/wp-content/cache/railway-page
 
 # Install cache system files if not already present
 CACHE_SYSTEM_SRC="/usr/local/share/railway-cache-system"
@@ -78,7 +72,10 @@ if [ ! -f "/var/www/html/wp-content/advanced-cache.php" ]; then
 if (defined('WP_CACHE') && WP_CACHE && !is_admin()) {
     define('RAILWAY_CACHE_DIR', WP_CONTENT_DIR . '/cache/railway-page/');
 
-    $cache_key = sha1(($_SERVER['HTTPS'] ?? 'off') !== 'off' ? 'https' : 'http' . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ($_SERVER['REQUEST_URI'] ?? '/'));
+    $scheme = (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && in_array(strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']), ['http', 'https'], true))
+        ? strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'])
+        : ((($_SERVER['HTTPS'] ?? 'off') !== 'off') ? 'https' : 'http');
+    $cache_key = sha1($scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ($_SERVER['REQUEST_URI'] ?? '/'));
     $cache_file = RAILWAY_CACHE_DIR . substr($cache_key, 0, 2) . '/' . $cache_key . '.cache';
 
     if (file_exists($cache_file) && (time() - filemtime($cache_file)) < 3600) {
@@ -127,17 +124,23 @@ define('WP_CACHE', true);\\
     fi
 fi
 
-# 6. Fix all permissions
-chown -R www-data:www-data /var/www/html
+# 7. Fix permissions for files this entrypoint creates or updates.
+chown www-data:www-data /var/www/html/health.php 2>/dev/null || true
+chown www-data:www-data /var/www/html/wp-content/advanced-cache.php 2>/dev/null || true
+chown www-data:www-data /var/www/html/wp-content/mu-plugins/railway-cache-manager.php 2>/dev/null || true
+
+# 7. Test nginx configuration after volume-backed cache paths exist.
+echo "Testing nginx configuration..."
+nginx -t
 
 echo "Railway Hybrid Cache System setup complete."
 
-# 7. Start Nginx (background, daemon off for proper signal handling)
+# 8. Start Nginx (background, daemon off for proper signal handling)
 echo "Starting Nginx..."
 nginx -g "daemon off;" &
 NGINX_PID=$!
 
-# 8. Start PHP-FPM (foreground)
+# 9. Start PHP-FPM (foreground)
 echo "Starting PHP-FPM..."
 php-fpm &
 PHP_FPM_PID=$!

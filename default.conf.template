@@ -49,6 +49,26 @@ server {
         deny all;
     }
 
+    # Cache files live under wp-content for Railway volume persistence, but
+    # must never be served directly from the public web root.
+    location ^~ /wp-content/cache/nginx/ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ^~ /wp-content/cache/railway-page/ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location = /wp-content/cache/railway-config.php {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
     # Health check endpoint
     location = /health {
         access_log off;
@@ -79,6 +99,10 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param HTTPS $railway_https;
+        fastcgi_param HTTP_X_FORWARDED_PROTO $railway_request_scheme;
+        fastcgi_param HTTP_X_FORWARDED_HOST $host;
+
 
         # ============================================
         # FASTCGI CACHE CONFIGURATION
@@ -90,9 +114,10 @@ server {
         fastcgi_cache_lock on;
         fastcgi_cache_lock_timeout 5s;
 
-        # Bypass cache for logged-in users and specific conditions
+        # Bypass cache for logged-in users, unsafe methods, dynamic URLs,
+        # and responses that set cookies.
         fastcgi_cache_bypass $cache_bypass;
-        fastcgi_no_cache $cache_bypass;
+        fastcgi_no_cache $cache_bypass $upstream_http_set_cookie;
 
         # Add cache status header for debugging
         add_header X-Cache-Status $upstream_cache_status always;

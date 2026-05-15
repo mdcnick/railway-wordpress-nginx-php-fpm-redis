@@ -38,17 +38,15 @@ RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli
 # RAILWAY CACHE SYSTEM SETUP
 # ============================================
 
-# Create cache system directory
+# Create cache system directory (source files copied into WordPress volume on startup)
 RUN mkdir -p /usr/local/share/railway-cache-system
 
 # Copy cache system files
 COPY cache-system/railway-cache-manager.php /usr/local/share/railway-cache-system/
 COPY cache-system/advanced-cache.php /usr/local/share/railway-cache-system/
 
-# Create nginx cache directory with proper permissions
-RUN mkdir -p /var/cache/nginx && \
-    chown -R www-data:www-data /var/cache/nginx && \
-    chmod 755 /var/cache/nginx
+# Note: NGINX cache directory lives inside WordPress volume at
+# /var/www/html/wp-content/cache/nginx — created by docker-entrypoint.sh on startup
 
 # CRITICAL: Fix Nginx permissions for Railway
 RUN mkdir -p /var/lib/nginx /var/log/nginx /run/nginx && \

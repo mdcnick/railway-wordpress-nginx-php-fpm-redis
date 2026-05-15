@@ -15,9 +15,15 @@ if (is_admin()) return;
 // CONFIGURATION (mirrors Breeze's approach)
 // ============================================
 
-define('RAILWAY_CACHE_DIR', WP_CONTENT_DIR . '/cache/railway-page/');
-define('RAILWAY_CACHE_EXPIRY', 3600); // 1 hour default
-define('RAILWAY_CACHE_VERSION', '1.0.0');
+if (!defined('RAILWAY_CACHE_DIR')) {
+    define('RAILWAY_CACHE_DIR', WP_CONTENT_DIR . '/cache/railway-page/');
+}
+if (!defined('RAILWAY_CACHE_EXPIRY')) {
+    define('RAILWAY_CACHE_EXPIRY', 3600);
+}
+if (!defined('RAILWAY_CACHE_VERSION')) {
+    define('RAILWAY_CACHE_VERSION', '1.0.0');
+}
 
 // ============================================
 // EARLY BYPASS CHECKS (zero WordPress dependency)
@@ -289,10 +295,24 @@ class Railway_Early_Cache
 
     private static function get_current_url(): string
     {
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443 ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
-        return $scheme . '://' . $host . $uri;
+        return self::get_request_scheme() . '://' . $host . $uri;
+    }
+
+    private static function get_request_scheme(): string
+    {
+        $forwarded_proto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
+        if (is_string($forwarded_proto)) {
+            $proto = strtolower(trim(explode(',', $forwarded_proto)[0]));
+            if ($proto === 'https' || $proto === 'http') {
+                return $proto;
+            }
+        }
+
+        return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? 80) == 443)
+            ? 'https'
+            : 'http';
     }
 
     private static function get_cache_file_path(): ?string

@@ -9,11 +9,26 @@
 // DYNAMIC DOMAIN DETECTION
 // ============================================
 
-// Force dynamic domain detection - overrides database values
+// Use the request host so cloned Railway services do not inherit another
+// site's database-stored home/site URL. Respect Railway's forwarded scheme
+// instead of forcing HTTPS inside the container.
 if (isset($_SERVER['HTTP_HOST'])) {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? 'https://' : 'https://';
-    define('WP_HOME', $protocol . $_SERVER['HTTP_HOST']);
-    define('WP_SITEURL', $protocol . $_SERVER['HTTP_HOST']);
+    $forwarded_proto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    if ($forwarded_proto === 'https' || $forwarded_proto === 'http') {
+        $scheme = $forwarded_proto;
+    } else {
+        $https = (string) ($_SERVER['HTTPS'] ?? '');
+        $port = (string) ($_SERVER['SERVER_PORT'] ?? '');
+        $scheme = ($https !== '' && strtolower($https) !== 'off') || $port === '443' ? 'https' : 'http';
+    }
+
+    $url = $scheme . '://' . $_SERVER['HTTP_HOST'];
+    if (!defined('WP_HOME')) {
+        define('WP_HOME', $url);
+    }
+    if (!defined('WP_SITEURL')) {
+        define('WP_SITEURL', $url);
+    }
 }
 
 // ============================================
@@ -29,8 +44,10 @@ if (getenv('REDIS_HOST')) {
     define('WP_REDIS_READ_TIMEOUT', 1);
     define('WP_REDIS_DATABASE', 0);
 
-    // Enable object caching (separate from page caching)
-    define('WP_CACHE', true);
+    // Enable object caching/page cache only if not already set by wp-config.php
+    if (!defined('WP_CACHE')) {
+        define('WP_CACHE', true);
+    }
 }
 
 // ============================================
