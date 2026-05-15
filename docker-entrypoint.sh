@@ -30,33 +30,102 @@ nginx -t
 
 # 4. Initialize WordPress files in volume (call original WP entrypoint)
 echo "Initializing WordPress..."
-# The original WordPress entrypoint at /usr/local/bin/docker-entrypoint.sh handles file setup
 docker-entrypoint.sh php-fpm -t
 
-# 5. Inject custom wp-config.php modifications for dynamic domain handling
+# ============================================
+# RAILWAY CACHE SYSTEM SETUP
+# ============================================
+
+echo "Setting up Railway Hybrid Cache System..."
+
+# Create cache directories with proper permissions
+mkdir -p /var/cache/nginx
+mkdir -p /var/www/html/wp-content/cache/railway-page
+mkdir -p /var/www/html/wp-content/cache/railway-config
+mkdir -p /var/www/html/wp-content/mu-plugins
+
+# Set ownership for nginx cache (www-data needs write access)
+chown -R www-data:www-data /var/cache/nginx
+chmod 755 /var/cache/nginx
+
+# Set ownership for WordPress cache directories
+chown -R www-data:www-data /var/www/html/wp-content/cache
+chmod 755 /var/www/html/wp-content/cache
+
+# Install cache system files if not already present
+CACHE_SYSTEM_SRC="/usr/local/share/railway-cache-system"
+
+if [ -d "$CACHE_SYSTEM_SRC" ]; then
+    # Copy mu-plugin (cache manager)
+    if [ -f "$CACHE_SYSTEM_SRC/railway-cache-manager.php" ]; then
+        cp "$CACHE_SYSTEM_SRC/railway-cache-manager.php" /var/www/html/wp-content/mu-plugins/
+        echo "Railway Cache Manager mu-plugin installed."
+    fi
+
+    # Copy advanced-cache.php (WordPress drop-in)
+    if [ -f "$CACHE_SYSTEM_SRC/advanced-cache.php" ]; then
+        cp "$CACHE_SYSTEM_SRC/advanced-cache.php" /var/www/html/wp-content/advanced-cache.php
+        echo "WordPress advanced-cache.php drop-in installed."
+    fi
+fi
+
+# Ensure advanced-cache.php exists (create minimal fallback if missing)
+if [ ! -f "/var/www/html/wp-content/advanced-cache.php" ]; then
+    echo "Creating fallback advanced-cache.php..."
+    cat > /var/www/html/wp-content/advanced-cache.php << 'CACHEEOF'
+<?php
+// Railway Cache - Fallback (will be replaced on next restart)
+if (defined('WP_CACHE') && WP_CACHE && !is_admin()) {
+    define('RAILWAY_CACHE_DIR', WP_CONTENT_DIR . '/cache/railway-page/');
+
+    $cache_key = sha1(($_SERVER['HTTPS'] ?? 'off') !== 'off' ? 'https' : 'http' . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ($_SERVER['REQUEST_URI'] ?? '/'));
+    $cache_file = RAILWAY_CACHE_DIR . substr($cache_key, 0, 2) . '/' . $cache_key . '.cache';
+
+    if (file_exists($cache_file) && (time() - filemtime($cache_file)) < 3600) {
+        $data = @unserialize(file_get_contents($cache_file));
+        if ($data && !empty($data['body'])) {
+            header('X-Cache-Status: HIT');
+            header('Content-Type: text/html; charset=UTF-8');
+            echo $data['body'];
+            exit;
+        }
+    }
+}
+CACHEEOF
+fi
+
+# 5. Inject custom wp-config.php modifications
+echo "Configuring wp-config.php..."
 if [ -f /var/www/html/wp-config.php ]; then
-    echo "Injecting dynamic domain configuration into wp-config.php..."
     # Check if our custom config is already injected
     if ! grep -q "wp-config-custom.php" /var/www/html/wp-config.php; then
-        # Insert our custom config at the beginning of wp-config.php (after <?php)
         sed -i "2i\\
 // Dynamic domain configuration - injected by Railway\\
 require_once('/usr/local/share/wp-config-custom.php');\\
 " /var/www/html/wp-config.php
-        echo "Dynamic domain configuration injected successfully."
-    else
-        echo "Dynamic domain configuration already present."
+        echo "Dynamic domain configuration injected."
+    fi
+
+    # Ensure WP_CACHE is defined
+    if ! grep -q "define.*WP_CACHE" /var/www/html/wp-config.php; then
+        # Add WP_CACHE after the opening PHP tag
+        sed -i "2i\\
+define('WP_CACHE', true);\\
+" /var/www/html/wp-config.php
+        echo "WP_CACHE enabled in wp-config.php."
+    elif grep -q "define.*WP_CACHE.*false" /var/www/html/wp-config.php; then
+        # Replace false with true
+        sed -i "s/define\s*(\s*['\"]WP_CACHE['\"]\s*,\s*false\s*)/define('WP_CACHE', true)/" /var/www/html/wp-config.php
+        echo "WP_CACHE set to true in wp-config.php."
     fi
 fi
 
-# 5.5. Write health check script (must be after WP init so volume exists)
-echo "Writing health check script..."
-echo '<?php header("Content-Type: application/json"); echo json_encode(["status" => "ok"]);' > /var/www/html/health.php
-
-# 6. Fix permissions
+# 6. Fix all permissions
 chown -R www-data:www-data /var/www/html
 
-# 7. Start Nginx (background, but not daemon mode for proper signal handling)
+echo "Railway Hybrid Cache System setup complete."
+
+# 7. Start Nginx (background, daemon off for proper signal handling)
 echo "Starting Nginx..."
 nginx -g "daemon off;" &
 NGINX_PID=$!

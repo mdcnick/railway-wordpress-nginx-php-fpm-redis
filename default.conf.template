@@ -1,11 +1,17 @@
 server {
     listen 80;
-    listen 8080;
     server_name _;
     root /var/www/html;
     index index.php index.html index.htm;
 
     client_max_body_size ${NGINX_CLIENT_MAX_BODY_SIZE};
+
+    # ============================================
+    # RAILWAY HYBRID CACHE SYSTEM
+    # L1: NGINX FastCGI Cache (anonymous visitors)
+    # L2: WordPress advanced-cache.php (logged-in/coordination)
+    # L3: Redis Object Cache (DB query acceleration)
+    # ============================================
 
     # Security Headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -18,23 +24,14 @@ server {
     gzip_min_length 1024;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
-    # Main location
-    location / {
-        try_files $uri $uri/ /index.php?$args;
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        access_log off;
     }
 
-    # PHP handling
-    location ~ \.php$ {
-        try_files $uri =404;
-        fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass 127.0.0.1:9000;
-        fastcgi_index index.php;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_param PATH_INFO $fastcgi_path_info;
-    }
-
-    # Block XML-RPC (common attack vector)
+    # Block XML-RPC
     location = /xmlrpc.php {
         deny all;
         access_log off;
@@ -51,20 +48,11 @@ server {
         deny all;
     }
 
-    # Cache static assets
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
+    # Health check endpoint
+    location /health {
         access_log off;
-    }
-
-    # Health check endpoint — proves both Nginx and PHP-FPM are alive
-    location = /health {
-        access_log off;
-        fastcgi_pass 127.0.0.1:9000;
-        fastcgi_param SCRIPT_FILENAME $document_root/health.php;
-        fastcgi_param QUERY_STRING "";
-        include fastcgi_params;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
     }
 
     # Deny access to hidden files
@@ -72,5 +60,39 @@ server {
         deny all;
         access_log off;
         log_not_found off;
+    }
+
+    # Main WordPress location
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    # PHP handling with FastCGI Cache
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+
+        # ============================================
+        # FASTCGI CACHE CONFIGURATION
+        # ============================================
+        fastcgi_cache WORDPRESS;
+        fastcgi_cache_valid 200 302 60m;
+        fastcgi_cache_valid 404 1m;
+        fastcgi_cache_use_stale error timeout invalid_header updating http_500 http_503;
+        fastcgi_cache_lock on;
+        fastcgi_cache_lock_timeout 5s;
+
+        # Bypass cache for logged-in users and specific conditions
+        fastcgi_cache_bypass $cache_bypass;
+        fastcgi_no_cache $cache_bypass;
+
+        # Add cache status header for debugging
+        add_header X-Cache-Status $upstream_cache_status always;
+        add_header X-Cache-Layer "NGINX-FastCGI" always;
     }
 }
