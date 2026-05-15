@@ -57,7 +57,9 @@ if (!defined('DISALLOW_FILE_EDIT')) {
 // ============================================
 
 // Cache directory path (used by advanced-cache.php)
-if (!defined('RAILWAY_CACHE_DIR')) {
+// This file is injected near the top of wp-config.php before WordPress defines
+// WP_CONTENT_DIR, so only define the path when WordPress has made it available.
+if (!defined('RAILWAY_CACHE_DIR') && defined('WP_CONTENT_DIR')) {
     define('RAILWAY_CACHE_DIR', WP_CONTENT_DIR . '/cache/railway-page/');
 }
 
